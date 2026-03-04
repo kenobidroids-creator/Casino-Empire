@@ -8,64 +8,58 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
   <canvas id="gameCanvas"></canvas>
 
-  <!-- ── HUD ── -->
+  <!-- HUD -->
   <div id="hud">
     <span id="hud-title">🎰 Casino Empire</span>
     <div class="hud-sep"></div>
-    <div class="hud-stat">
-      <span class="hud-label">Balance</span>
-      <span class="hud-val" id="h-money">$5,000</span>
-    </div>
+    <div class="hud-stat"><span class="hud-label">Balance</span><span class="hud-val" id="h-money">$5,000</span></div>
     <div class="hud-sep"></div>
-    <div class="hud-stat">
-      <span class="hud-label">Earned/min</span>
-      <span class="hud-val" id="h-rev">$0</span>
-    </div>
+    <div class="hud-stat"><span class="hud-label">Rev/min</span><span class="hud-val" id="h-rev">$0</span></div>
     <div class="hud-sep"></div>
-    <div class="hud-stat">
-      <span class="hud-label">Patrons</span>
-      <span class="hud-val" id="h-pat">0</span>
-    </div>
+    <div class="hud-stat"><span class="hud-label">Patrons</span><span class="hud-val" id="h-pat">0</span></div>
     <div class="hud-sep"></div>
-    <div class="hud-stat">
-      <span class="hud-label">Day</span>
-      <span class="hud-val" id="h-day">1</span>
-    </div>
+    <div class="hud-stat"><span class="hud-label">Staff</span><span class="hud-val" id="h-emp">0</span></div>
+    <div class="hud-sep"></div>
+    <div class="hud-stat"><span class="hud-label">Day</span><span class="hud-val" id="h-day">1</span></div>
   </div>
 
-  <!-- ── Top Controls ── -->
+  <!-- Top Controls -->
   <div id="controls">
     <div class="ctrl-group">
       <button class="ctrl-btn danger" id="del-btn" onclick="toggleDelete()">🗑 Remove</button>
-      <button class="ctrl-btn" onclick="saveGame()" id="save-btn">💾 Save</button>
-      <span id="save-lbl">auto-saves every 30s</span>
+      <button class="ctrl-btn" onclick="saveGame()">💾 Save</button>
+      <span id="save-lbl">auto-saves 30s</span>
+      <span id="placement-label"></span>
     </div>
     <div class="ctrl-group">
+      <button class="ctrl-btn" id="rotate-btn" onclick="rotatePlacement()" title="Rotate placement (R)">🔄 Rotate</button>
       <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1×</button>
       <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2×</button>
       <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3×</button>
+      <button class="ctrl-btn" onclick="openMinigame()">🎰 Play</button>
     </div>
   </div>
 
-  <!-- ── Cashier Alert Banner ── -->
+  <!-- Carrying indicator -->
+  <div id="carry-bar"></div>
+
+  <!-- Place cancel -->
+  <button id="place-cancel-btn" class="ctrl-btn danger" onclick="exitPlacementMode()">✕ Cancel Placement</button>
+
+  <!-- Cashier alert -->
   <div id="cashier-alert">
-    <div class="cashier-badge" id="cashier-badge" onclick="openCashierPanel()">
-      💵 Patron waiting — Click to serve
-    </div>
+    <div class="cashier-badge" onclick="openCashierPanel()">💵 Patron waiting — tap to serve</div>
   </div>
 
-  <!-- ── Drag Ghost ── -->
+  <!-- Drag ghost -->
   <div id="drag-ghost"></div>
 
-  <!-- ── Hotbar ── -->
-  <div id="hotbar">
-    <div id="hotbar-scroll"></div>
-  </div>
+  <!-- Hotbar -->
+  <div id="hotbar"><div id="hotbar-scroll"></div></div>
 
-  <!-- ── Upgrade Panel ── -->
+  <!-- Upgrade Panel -->
   <div id="upgrade-panel" class="panel">
     <button class="panel-close" onclick="closeUpgradePanel()">✕</button>
     <h2 id="upg-title">Machine</h2>
@@ -74,63 +68,108 @@
     <button class="btn-sell" onclick="sellSelected()">Sell (50% value)</button>
   </div>
 
-  <!-- ── Cashier Panel ── -->
+  <!-- Cashier Panel -->
   <div id="cashier-panel" class="panel">
     <button class="panel-close" onclick="closeCashierPanel()">✕</button>
     <h2>💵 Cashier Window</h2>
     <div class="patron-name" id="cpat-name">Patron</div>
     <div class="ticket-amt" id="ctick">$0.00</div>
-
     <div class="till-wrap">
       <div class="till-lbl">Your Till — click to add to tray</div>
       <div class="till-section-label">Bills</div>
       <div class="till-bills" id="till-bills"></div>
-      <div class="till-section-label coins-label">Coins</div>
+      <div class="till-section-label">Coins</div>
       <div class="till-bills" id="till-coins"></div>
     </div>
-
-    <div class="till-lbl" style="padding:0 2px 5px">Payment Tray</div>
-    <div class="pay-area" id="pay-area">
-      <span class="pay-placeholder">Add bills or coins from till above…</span>
-    </div>
+    <div class="till-lbl" style="padding:0 2px 4px">Payment Tray</div>
+    <div class="pay-area" id="pay-area"><span class="pay-placeholder">Add bills or coins…</span></div>
     <div class="pay-total" id="pay-total">Tray: $0.00 / Owed: $0.00</div>
-
     <div class="cashier-btns">
       <button class="btn-pay" onclick="confirmPay()">✓ Pay</button>
       <button class="btn-auto" onclick="autoPay()">⚡ Auto</button>
-      <button class="btn-clr" onclick="clearTray()">✕ Clear</button>
+      <button class="btn-clr" onclick="clearTray()">✕</button>
     </div>
     <div class="queue-info" id="queue-info"></div>
   </div>
 
-  <!-- ── Toasts ── -->
+  <!-- Jackpot Panel -->
+  <div id="jp-panel" class="panel">
+    <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">✕</button>
+    <h2 style="text-align:center">🏆 JACKPOT HAND PAY</h2>
+    <p style="text-align:center;color:var(--text-muted);font-size:12px;margin-bottom:4px">Patron won:</p>
+    <div class="jp-amount" id="jp-amount">$0.00</div>
+    <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-bottom:8px">Pay out from your balance</p>
+    <button class="btn-jp" onclick="confirmJackpay()">✓ HAND PAY</button>
+  </div>
+
+  <!-- Dropped Money Panel -->
+  <div id="dm-panel" class="panel">
+    <button class="panel-close" onclick="document.getElementById('dm-panel').style.display='none'">✕</button>
+    <h2 style="text-align:center">💰 Found Money</h2>
+    <p style="text-align:center;color:var(--gold-light);font-size:22px;font-family:'Playfair Display',serif;margin:6px 0" id="dm-amount">$0.00</p>
+    <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-bottom:2px">A patron dropped this. What will you do?</p>
+    <div class="dm-choices">
+      <button class="dm-btn" onclick="collectDropped('keep')">😈 Keep it ($$$)</button>
+      <button class="dm-btn" onclick="collectDropped('lostandfound')">📦 Lost &amp; Found</button>
+      <button class="dm-btn" onclick="collectDropped('charity')">❤️ Donate to Charity</button>
+    </div>
+  </div>
+
+  <!-- Mini-game Panel -->
+  <div id="mg-panel" class="panel">
+    <button class="panel-close" onclick="closeMinigame()">✕</button>
+    <h2 style="text-align:center">🎰 Try Your Luck</h2>
+    <canvas id="mg-canvas" width="340" height="100"></canvas>
+    <div class="mg-controls">
+      <button class="mg-btn" onclick="mgSetBet(-5)">−$5</button>
+      <button class="mg-btn" onclick="mgSetBet(-1)">−$1</button>
+      <span style="color:var(--gold-light);font-size:16px;font-weight:700;min-width:60px;text-align:center" id="mg-bet">$5</span>
+      <button class="mg-btn" onclick="mgSetBet(1)">+$1</button>
+      <button class="mg-btn" onclick="mgSetBet(5)">+$5</button>
+    </div>
+    <button class="mg-spin" id="mg-spin-btn" onclick="mgSpin()">SPIN</button>
+    <div id="mg-result"></div>
+    <div class="payout-table">
+      <div class="payout-row">7 = <span>8×</span></div>
+      <div class="payout-row">💎 = <span>5×</span></div>
+      <div class="payout-row">⭐ = <span>3×</span></div>
+      <div class="payout-row">BAR = <span>2.5×</span></div>
+      <div class="payout-row">🔔 = <span>2×</span></div>
+      <div class="payout-row">🍊 = <span>1.5×</span></div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
   <div id="toasts"></div>
 
-  <!-- ── Tutorial Overlay ── -->
+  <!-- Tutorial -->
   <div id="tutorial">
     <div id="tbox">
       <div class="big-icon">🎰</div>
       <h1>Casino Empire</h1>
-      <div class="sub">Build and manage your own casino floor</div>
-      <div class="tip"><strong>📦 Place Machines</strong> — Drag items from the bottom hotbar onto the floor</div>
-      <div class="tip"><strong>👥 Patrons</strong> — They arrive and play your slot machines automatically</div>
-      <div class="tip"><strong>💰 Economy</strong> — You collect all bets. Pay winners at the Cashier Window</div>
-      <div class="tip"><strong>🏧 Kiosk</strong> — Self-service payout — patrons cash out automatically</div>
-      <div class="tip"><strong>🔧 Upgrades</strong> — Click any machine to upgrade or sell it</div>
-      <div class="tip"><strong>🗺 Camera</strong> — Drag the floor to pan around your casino</div>
+      <div class="sub">A pixel-art casino management sim</div>
+      <div class="tip"><strong>📲 Mobile Placement</strong> — Tap a hotbar item to select it, then tap the floor to place. Use 🔄 Rotate to change direction.</div>
+      <div class="tip"><strong>🖱 Desktop</strong> — Drag items from the hotbar directly onto the floor</div>
+      <div class="tip"><strong>💰 Economy</strong> — Collect bets. Pay winning tickets at Cashier Window</div>
+      <div class="tip"><strong>🏆 Jackpots</strong> — Big wins need a hand-pay! Tap the flashing machine</div>
+      <div class="tip"><strong>🍺 Bar & Staff</strong> — Place a Bar to serve drinks. Hire staff to automate tasks</div>
+      <div class="tip"><strong>💸 Dropped Money</strong> — Patrons sometimes drop coins. Tap to collect!</div>
       <button class="btn-start" onclick="startGame()">Open the Doors!</button>
     </div>
   </div>
 
-  <!-- Scripts — order matters -->
+  <!-- Scripts (order matters) -->
   <script src="js/config.js"></script>
   <script src="js/state.js"></script>
   <script src="js/render.js"></script>
+  <script src="js/sprites.js"></script>
   <script src="js/patrons.js"></script>
+  <script src="js/employees.js"></script>
   <script src="js/machines.js"></script>
   <script src="js/cashier.js"></script>
+  <script src="js/food.js"></script>
+  <script src="js/minigame.js"></script>
   <script src="js/input.js"></script>
   <script src="js/game.js"></script>
-
 </body>
 </html>

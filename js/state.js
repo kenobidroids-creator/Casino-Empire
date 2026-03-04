@@ -1,44 +1,47 @@
-// ═══════════════════════════════════════════════
-//  state.js — Single mutable game state object
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════
+//  state.js
+// ═══════════════════════════════════════════
 
 const G = {
-  // Economy
-  money:        5000,
-  totalEarned:  0,
+  money:0, totalEarned:0, day:1, speed:1,
 
-  // Time
-  day:          1,
-  speed:        1,
-  dayTimer:     0,
-  dayLen:       240000,   // ms real-time per in-game day
+  machines:[], patrons:[], employees:[],
+  nextMid:1, nextPid:1, nextEid:1,
 
-  // Entities
-  machines:     [],       // { id, type, tx, ty, upgrades, occupied, totalEarned }
-  patrons:      [],       // patron objects
-  nextMid:      1,
-  nextPid:      1,
+  cashierQueue:[], cashierServing:null, payTray:[],
 
-  // Cashier
-  cashierQueue:   [],     // patron ids waiting at cashier window
-  cashierServing: null,   // patron object currently being served
-  payTray:        [],     // array of numeric denomination values in tray
+  jackpots:[],         // { id, machineId, patronId, amount, timer }
+  droppedMoney:[],     // { id, wx, wy, amount }
+  nextDropId:1,
 
-  // Camera
-  camera: { x: 0, y: 0 },
+  foodOrders:[],       // { id, patronId, barId, item, state, progress, serverId, tray, tip }
+  nextOrderId:1,
+  dirtyItems:[],       // { id, machineId | barId | tableId, wx, wy }
+  nextDirtyId:1,
 
-  // UI state
-  selectedMid:  null,
-  dragging:     null,     // { type } while hotbar item is being dragged
-  deleteMode:   false,
+  // Tips waiting to be collected
+  tips:[],             // { id, wx, wy, amount, patronId }
+  nextTipId:1,
 
-  // Revenue tracking (per-minute rolling window)
-  revBucket:    [],       // [{ t: timestamp, v: amount }]
+  camera:{ x:0, y:0 },
+  selectedMid:null,
+  deleteMode:false,
+  dragging:null,         // { type } hotbar drag (desktop)
+  placementSelected:null,// type string — mobile tap-to-place selection
+  placementRotation:0,   // 0-3
 
-  // Spawn timing
-  spawnCooldown: 7000,
-  spawnAcc:      0,
+  revBucket:[],
+  spawnAcc:0,
+  spawnCooldown:7000,
+  autosaveAcc:0,
+  dayAcc:0,
+  dayLen:240000,
 
-  // Autosave
-  autosaveAcc:  0,
+  minigameOpen:false,
+  minigameReels:[ {pos:0,speed:0,stopped:true,target:0},
+                  {pos:0,speed:0,stopped:true,target:0},
+                  {pos:0,speed:0,stopped:true,target:0} ],
+  minigameBet:5,
+  minigameSpinning:false,
+  minigameResult:null,
 };
