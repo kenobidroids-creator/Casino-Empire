@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎰 Casino Empire</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- ── HUD ── -->
+  <div id="hud">
+    <span id="hud-title">🎰 Casino Empire</span>
+    <div class="hud-sep"></div>
+    <div class="hud-stat">
+      <span class="hud-label">Balance</span>
+      <span class="hud-val" id="h-money">$5,000</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-stat">
+      <span class="hud-label">Earned/min</span>
+      <span class="hud-val" id="h-rev">$0</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-stat">
+      <span class="hud-label">Patrons</span>
+      <span class="hud-val" id="h-pat">0</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-stat">
+      <span class="hud-label">Day</span>
+      <span class="hud-val" id="h-day">1</span>
+    </div>
+  </div>
+
+  <!-- ── Top Controls ── -->
+  <div id="controls">
+    <div class="ctrl-group">
+      <button class="ctrl-btn danger" id="del-btn" onclick="toggleDelete()">🗑 Remove</button>
+      <button class="ctrl-btn" onclick="saveGame()" id="save-btn">💾 Save</button>
+      <span id="save-lbl">auto-saves every 30s</span>
+    </div>
+    <div class="ctrl-group">
+      <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1×</button>
+      <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2×</button>
+      <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3×</button>
+    </div>
+  </div>
+
+  <!-- ── Cashier Alert Banner ── -->
+  <div id="cashier-alert">
+    <div class="cashier-badge" id="cashier-badge" onclick="openCashierPanel()">
+      💵 Patron waiting — Click to serve
+    </div>
+  </div>
+
+  <!-- ── Drag Ghost ── -->
+  <div id="drag-ghost"></div>
+
+  <!-- ── Hotbar ── -->
+  <div id="hotbar">
+    <div id="hotbar-scroll"></div>
+  </div>
+
+  <!-- ── Upgrade Panel ── -->
+  <div id="upgrade-panel" class="panel">
+    <button class="panel-close" onclick="closeUpgradePanel()">✕</button>
+    <h2 id="upg-title">Machine</h2>
+    <div class="mstat-grid" id="mstats"></div>
+    <div id="upg-options"></div>
+    <button class="btn-sell" onclick="sellSelected()">Sell (50% value)</button>
+  </div>
+
+  <!-- ── Cashier Panel ── -->
+  <div id="cashier-panel" class="panel">
+    <button class="panel-close" onclick="closeCashierPanel()">✕</button>
+    <h2>💵 Cashier Window</h2>
+    <div class="patron-name" id="cpat-name">Patron</div>
+    <div class="ticket-amt" id="ctick">$0.00</div>
+
+    <div class="till-wrap">
+      <div class="till-lbl">Your Till — click to add to tray</div>
+      <div class="till-section-label">Bills</div>
+      <div class="till-bills" id="till-bills"></div>
+      <div class="till-section-label coins-label">Coins</div>
+      <div class="till-bills" id="till-coins"></div>
+    </div>
+
+    <div class="till-lbl" style="padding:0 2px 5px">Payment Tray</div>
+    <div class="pay-area" id="pay-area">
+      <span class="pay-placeholder">Add bills or coins from till above…</span>
+    </div>
+    <div class="pay-total" id="pay-total">Tray: $0.00 / Owed: $0.00</div>
+
+    <div class="cashier-btns">
+      <button class="btn-pay" onclick="confirmPay()">✓ Pay</button>
+      <button class="btn-auto" onclick="autoPay()">⚡ Auto</button>
+      <button class="btn-clr" onclick="clearTray()">✕ Clear</button>
+    </div>
+    <div class="queue-info" id="queue-info"></div>
+  </div>
+
+  <!-- ── Toasts ── -->
+  <div id="toasts"></div>
+
+  <!-- ── Tutorial Overlay ── -->
+  <div id="tutorial">
+    <div id="tbox">
+      <div class="big-icon">🎰</div>
+      <h1>Casino Empire</h1>
+      <div class="sub">Build and manage your own casino floor</div>
+      <div class="tip"><strong>📦 Place Machines</strong> — Drag items from the bottom hotbar onto the floor</div>
+      <div class="tip"><strong>👥 Patrons</strong> — They arrive and play your slot machines automatically</div>
+      <div class="tip"><strong>💰 Economy</strong> — You collect all bets. Pay winners at the Cashier Window</div>
+      <div class="tip"><strong>🏧 Kiosk</strong> — Self-service payout — patrons cash out automatically</div>
+      <div class="tip"><strong>🔧 Upgrades</strong> — Click any machine to upgrade or sell it</div>
+      <div class="tip"><strong>🗺 Camera</strong> — Drag the floor to pan around your casino</div>
+      <button class="btn-start" onclick="startGame()">Open the Doors!</button>
+    </div>
+  </div>
+
+  <!-- Scripts — order matters -->
+  <script src="js/config.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/patrons.js"></script>
+  <script src="js/machines.js"></script>
+  <script src="js/cashier.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/game.js"></script>
+
+</body>
+</html>
