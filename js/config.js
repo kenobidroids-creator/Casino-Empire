@@ -2,13 +2,18 @@
 //  config.js
 // ═══════════════════════════════════════════
 
-const TILE = 64;
-const FW   = 30;
-const FH   = 22;
-const WALL = 1;
+const TILE     = 64;
+const WALL     = 1;
 
-const ENT_TX = Math.floor(FW / 2);
-const ENT_TY = FH - 1;
+// Floor starts small; player can expand
+const FLOOR_LEVELS = [
+  { w: 14, h: 10, cost: 0,    label: 'Starter'   },
+  { w: 20, h: 14, cost: 3000, label: 'Mid-size'  },
+  { w: 28, h: 20, cost: 8000, label: 'Full Casino'}
+];
+// Convenience aliases updated at runtime via G.floorW / G.floorH
+const ENT_TX = () => Math.floor(G.floorW/2);
+const ENT_TY = () => G.floorH - 1;
 
 const REEL_SYMBOLS   = ['7','BAR','🔔','🍊','🍋','🍒','⭐','💎'];
 const REEL_COLORS    = ['#ff4444','#fff','#f0c040','#f07020','#e8e040','#e04060','#f8e040','#80c8ff'];
@@ -51,6 +56,10 @@ const MACHINE_DEFS = {
   table: {
     name:'Table',          icon:'🪑', color:'#3a2010', w:1, h:1,
     cost:120, tier:0, isSlot:false, isTable:true, seats:1
+  },
+  surveillance: {
+    name:'Surveillance Rm', icon:'📷', color:'#182840', w:1, h:1,
+    cost:900, tier:0, isSlot:false, isSurveillance:true
   }
 };
 

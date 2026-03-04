@@ -3,45 +3,60 @@
 // ═══════════════════════════════════════════
 
 const G = {
-  money:0, totalEarned:0, day:1, speed:1,
+  money:5000, totalEarned:0, day:1, speed:1,
+  floorLevel:0,   // index into FLOOR_LEVELS
+  floorW:FLOOR_LEVELS[0].w,
+  floorH:FLOOR_LEVELS[0].h,
 
   machines:[], patrons:[], employees:[],
   nextMid:1, nextPid:1, nextEid:1,
 
   cashierQueue:[], cashierServing:null, payTray:[],
 
-  jackpots:[],         // { id, machineId, patronId, amount, timer }
-  droppedMoney:[],     // { id, wx, wy, amount }
+  jackpots:[],
+  droppedMoney:[],    // { id, wx, wy, amount, patronName }
   nextDropId:1,
 
-  foodOrders:[],       // { id, patronId, barId, item, state, progress, serverId, tray, tip }
-  nextOrderId:1,
-  dirtyItems:[],       // { id, machineId | barId | tableId, wx, wy }
-  nextDirtyId:1,
+  // Found money collected during the day - player decides what to do at day-end
+  collectedMoneyPool: 0,
+  lostAndFoundLog:    [],  // { patronName, amount, day }
 
-  // Tips waiting to be collected
-  tips:[],             // { id, wx, wy, amount, patronId }
-  nextTipId:1,
+  foodOrders:[], nextOrderId:1,
+  dirtyItems:[], nextDirtyId:1,
+  tips:[],       nextTipId:1,
 
   camera:{ x:0, y:0 },
   selectedMid:null,
   deleteMode:false,
-  dragging:null,         // { type } hotbar drag (desktop)
-  placementSelected:null,// type string — mobile tap-to-place selection
-  placementRotation:0,   // 0-3
+  dragging:null,
+  placementSelected:null,
+  placementRotation:0,
+
+  // Move mode
+  moveMode:null,   // { machineId, origTx, origTy }
+
+  // Collection swipe
+  collecting:false,
+
+  // Day stats
+  dayStats: {
+    patronsVisited:0, moneyIn:0, moneyOut:0,
+    wages:0, tips:0, foundMoney:0, jackpotsPaid:0
+  },
 
   revBucket:[],
-  spawnAcc:0,
-  spawnCooldown:7000,
-  autosaveAcc:0,
-  dayAcc:0,
-  dayLen:240000,
+  spawnAcc:0, spawnCooldown:7000,
+  autosaveAcc:0, dayAcc:0, dayLen:240000,
 
   minigameOpen:false,
-  minigameReels:[ {pos:0,speed:0,stopped:true,target:0},
-                  {pos:0,speed:0,stopped:true,target:0},
-                  {pos:0,speed:0,stopped:true,target:0} ],
+  minigameReels:[
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0},
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0},
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0}
+  ],
   minigameBet:5,
   minigameSpinning:false,
   minigameResult:null,
+
+  surveillanceOpen:false,
 };

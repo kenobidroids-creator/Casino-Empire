@@ -13,7 +13,7 @@ const w2s        = (wx,wy) => ({ x:wx+G.camera.x, y:wy+G.camera.y });
 const s2w        = (sx,sy) => ({ x:sx-G.camera.x, y:sy-G.camera.y });
 const tile2world = (tx,ty) => ({ x:(tx+WALL)*TILE, y:(ty+WALL)*TILE });
 const world2tile = (wx,wy) => ({ tx:Math.floor(wx/TILE)-WALL, ty:Math.floor(wy/TILE)-WALL });
-const validTile  = (tx,ty) => tx>=0 && ty>=0 && tx<FW && ty<FH;
+const validTile  = (tx,ty) => tx>=0 && ty>=0 && tx<G.floorW && ty<G.floorH;
 
 function tileOccupied(tx,ty,skipId=null) {
   for(const m of G.machines) {
@@ -28,12 +28,18 @@ function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
   ctx.imageSmoothingEnabled = false;
+  // Update CSS var for panels that sit above hotbar
+  const hb = document.getElementById('hotbar');
+  if(hb) {
+    const h = hb.offsetHeight||96;
+    document.documentElement.style.setProperty('--hotbar-h', h+'px');
+  }
   clampCam();
 }
 
 function clampCam() {
   const hotH = parseInt(getComputedStyle(document.getElementById('hotbar')).height)||96;
-  const WW   = (FW+2*WALL)*TILE, WH = (FH+2*WALL)*TILE;
+  const WW   = (G.floorW+2*WALL)*TILE, WH = (G.floorH+2*WALL)*TILE;
   G.camera.x = Math.max(Math.min(0,canvas.width-WW),  Math.min(0,G.camera.x));
   G.camera.y = Math.max(Math.min(0,canvas.height-WH-hotH), Math.min(0,G.camera.y));
 }
@@ -48,7 +54,7 @@ function render() {
   ctx.fillRect(0,0,cw,ch);
 
   // ── Building shell ──
-  const bw=(FW+2*WALL)*TILE, bh=(FH+2*WALL)*TILE;
+  const bw=(G.floorW+2*WALL)*TILE, bh=(G.floorH+2*WALL)*TILE;
   // Outer wall fill
   ctx.fillStyle='#1a0e06';
   ctx.fillRect(cx,cy,bw,bh);
@@ -61,7 +67,7 @@ function render() {
   ctx.strokeRect(cx+6,cy+6,bw-12,bh-12);
 
   // ── Floor ──
-  const fx=cx+WALL*TILE, fy=cy+WALL*TILE, fw=FW*TILE, fh=FH*TILE;
+  const fx=cx+WALL*TILE, fy=cy+WALL*TILE, fw=G.floorW*TILE, fh=G.floorH*TILE;
   // Carpet base
   ctx.fillStyle='#0a2e14';
   ctx.fillRect(fx,fy,fw,fh);
@@ -72,7 +78,7 @@ function render() {
   ctx.strokeRect(fx+4,fy+4,fw-8,fh-8);
 
   // ── Entrance ──
-  const ex=fx+ENT_TX*TILE, ey=cy+(FH+WALL)*TILE;
+  const ex=fx+ENT_TX()*TILE, ey=cy+(G.floorH+WALL)*TILE;
   ctx.fillStyle='#0a2e14';
   ctx.fillRect(ex+2,ey-2,TILE-4,WALL*TILE+4);
   // Entrance arrows
@@ -125,8 +131,8 @@ function drawBrickWall(bx,by,bw,bh) {
 
 function drawCarpet(fx,fy,fw,fh) {
   const sz=TILE/2;
-  for(let ty=0; ty<FH*2; ty++) {
-    for(let tx=0; tx<FW*2; tx++) {
+  for(let ty=0; ty<G.floorH*2; ty++) {
+    for(let tx=0; tx<G.floorW*2; tx++) {
       const px=fx+tx*sz, py=fy+ty*sz;
       if((tx+ty)%2===0) {
         ctx.fillStyle='rgba(20,180,80,.04)';
@@ -141,8 +147,8 @@ function drawCarpet(fx,fy,fw,fh) {
     }
   }
   // Diamond motif every 4 tiles
-  for(let ty=2; ty<FH; ty+=4) {
-    for(let tx=2; tx<FW; tx+=4) {
+  for(let ty=2; ty<G.floorH; ty+=4) {
+    for(let tx=2; tx<G.floorW; tx+=4) {
       const cx2=fx+tx*TILE+TILE/2, cy2=fy+ty*TILE+TILE/2, r=14;
       ctx.strokeStyle='rgba(201,168,76,.12)';
       ctx.lineWidth=1;
@@ -210,7 +216,7 @@ function drawJackpotFlash(j) {
 }
 
 function drawPlacementPreview() {
-  const type = G.dragging?.type || G.placementSelected;
+  const type = G.dragging?.type || G.placementSelected || (G.moveMode ? G.machines.find(m=>m.id===G.moveMode.machineId)?.type : null);
   if(!type || !hoverTile) return;
   const def=MACHINE_DEFS[type];
   const rot=G.placementRotation;
@@ -220,17 +226,38 @@ function drawPlacementPreview() {
   const wp=tile2world(tx,ty), sp=w2s(wp.x,wp.y);
   let ok=true;
   for(let dx=0;dx<pw;dx++) for(let dy=0;dy<ph;dy++)
-    if(!validTile(tx+dx,ty+dy)||tileOccupied(tx+dx,ty+dy)) ok=false;
-  ctx.fillStyle  =ok?'rgba(80,200,80,.22)':'rgba(200,60,60,.22)';
+    if(!validTile(tx+dx,ty+dy)||tileOccupied(tx+dx,ty+dy,G.moveMode?.machineId)) ok=false;
+
+  // Ghost fill
+  ctx.fillStyle  =ok?'rgba(80,200,80,.2)':'rgba(200,60,60,.2)';
   ctx.strokeStyle=ok?'#60d060':'#d06060';
   ctx.lineWidth=2;
   ctx.fillRect(sp.x,sp.y,pw*TILE,ph*TILE);
   ctx.strokeRect(sp.x,sp.y,pw*TILE,ph*TILE);
-  // rotation arrow
-  ctx.fillStyle=ok?'rgba(80,200,80,.7)':'rgba(200,60,60,.7)';
-  ctx.font='16px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+
+  // Icon in center
+  ctx.font=`${Math.floor(Math.min(pw,ph)*TILE*.38)}px serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.globalAlpha=.6;
+  ctx.fillText(def.icon,sp.x+pw*TILE/2,sp.y+ph*TILE/2);
+  ctx.globalAlpha=1;
+
+  // Rotation direction arrow
   const arrows=['↓','←','↑','→'];
-  ctx.fillText(arrows[rot],sp.x+pw*TILE/2,sp.y+ph*TILE/2);
+  ctx.fillStyle=ok?'rgba(80,200,80,.9)':'rgba(200,60,60,.9)';
+  ctx.font='bold 12px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(arrows[rot],sp.x+pw*TILE/2,sp.y+ph*TILE/2+16);
+
+  // ── Rotation handle (circle button top-right) ──
+  const hx=sp.x+pw*TILE-12, hy=sp.y+12;
+  ctx.fillStyle='rgba(30,30,40,.85)';
+  ctx.beginPath(); ctx.arc(hx,hy,12,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(201,168,76,.7)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(hx,hy,12,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='#f0d080'; ctx.font='13px serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🔄',hx,hy);
 }
 
 // ── Float text helper ──

@@ -3,173 +3,220 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🎰 Casino Empire</title>
+  <title>Casino Empire</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
 
-  <!-- HUD -->
-  <div id="hud">
-    <span id="hud-title">🎰 Casino Empire</span>
-    <div class="hud-sep"></div>
-    <div class="hud-stat"><span class="hud-label">Balance</span><span class="hud-val" id="h-money">$5,000</span></div>
-    <div class="hud-sep"></div>
-    <div class="hud-stat"><span class="hud-label">Rev/min</span><span class="hud-val" id="h-rev">$0</span></div>
-    <div class="hud-sep"></div>
-    <div class="hud-stat"><span class="hud-label">Patrons</span><span class="hud-val" id="h-pat">0</span></div>
-    <div class="hud-sep"></div>
-    <div class="hud-stat"><span class="hud-label">Staff</span><span class="hud-val" id="h-emp">0</span></div>
-    <div class="hud-sep"></div>
-    <div class="hud-stat"><span class="hud-label">Day</span><span class="hud-val" id="h-day">1</span></div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <span id="hud-title">Casino Empire</span>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><span class="hud-label">Balance</span><span class="hud-val" id="h-money">$5,000</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><span class="hud-label">Rev/min</span><span class="hud-val" id="h-rev">$0</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><span class="hud-label">Patrons</span><span class="hud-val" id="h-pat">0</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><span class="hud-label">Staff</span><span class="hud-val" id="h-emp">0</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><span class="hud-label">Day</span><span class="hud-val" id="h-day">1</span></div>
+</div>
+
+<!-- Top Controls -->
+<div id="controls">
+  <div class="ctrl-group">
+    <button class="ctrl-btn danger" id="del-btn" onclick="toggleDelete()">Remove</button>
+    <button class="ctrl-btn" onclick="saveGame()">Save</button>
+    <span id="save-lbl">auto-saves 30s</span>
+    <span id="placement-label"></span>
+    <span id="found-money-badge"></span>
   </div>
+  <div class="ctrl-group">
+    <button class="ctrl-btn" id="expand-btn" onclick="expandFloor()" style="display:none">Expand Floor</button>
+    <button class="ctrl-btn" onclick="rotatePlacement()" title="Rotate (R key)">Rotate</button>
+    <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1x</button>
+    <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2x</button>
+    <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3x</button>
+    <button class="ctrl-btn" onclick="openMinigame()">Play Slots</button>
+  </div>
+</div>
 
-  <!-- Top Controls -->
-  <div id="controls">
-    <div class="ctrl-group">
-      <button class="ctrl-btn danger" id="del-btn" onclick="toggleDelete()">🗑 Remove</button>
-      <button class="ctrl-btn" onclick="saveGame()">💾 Save</button>
-      <span id="save-lbl">auto-saves 30s</span>
-      <span id="placement-label"></span>
+<!-- Carrying indicator -->
+<div id="carry-bar"></div>
+
+<!-- Place cancel -->
+<div id="place-cancel-btn">
+  <button class="ctrl-btn" onclick="rotatePlacement()">Rotate</button>
+  <button class="ctrl-btn danger" onclick="exitPlacementMode()">Cancel</button>
+</div>
+
+<!-- Cashier alert -->
+<div id="cashier-alert">
+  <div class="cashier-badge" onclick="openCashierPanel()">Patron waiting at cashier</div>
+</div>
+
+<!-- Drag ghost -->
+<div id="drag-ghost"></div>
+
+<!-- Hotbar -->
+<div id="hotbar"><div id="hotbar-scroll"></div></div>
+
+<!-- UPGRADE PANEL -->
+<div id="upgrade-panel" class="panel">
+  <button class="panel-close" onclick="closeUpgradePanel()">X</button>
+  <h2 id="upg-title">Machine</h2>
+  <div class="mstat-grid" id="mstats"></div>
+  <div id="upg-options"></div>
+  <button class="btn-sell" onclick="sellSelected()">Sell (50% value)</button>
+</div>
+
+<!-- CASHIER PANEL -->
+<div id="cashier-panel" class="panel">
+  <button class="panel-close" onclick="closeCashierPanel()">X</button>
+  <h2>Cashier Window</h2>
+  <div class="patron-name" id="cpat-name">Patron</div>
+  <div class="ticket-amt" id="ctick">$0.00</div>
+  <div class="till-wrap">
+    <div class="till-lbl">Your Till</div>
+    <div class="till-section-label">Bills</div>
+    <div class="till-bills" id="till-bills"></div>
+    <div class="till-section-label">Coins</div>
+    <div class="till-bills" id="till-coins"></div>
+  </div>
+  <div class="till-lbl" style="padding:0 2px 3px">Payment Tray</div>
+  <div class="pay-area" id="pay-area"><span class="pay-placeholder">Tap bills or coins above...</span></div>
+  <div class="pay-total" id="pay-total">Tray: $0.00 / Owed: $0.00</div>
+  <div class="cashier-btns">
+    <button class="btn-pay"  onclick="confirmPay()">Pay</button>
+    <button class="btn-auto" onclick="autoPay()">Auto Pay</button>
+    <button class="btn-clr"  onclick="clearTray()">Clear</button>
+  </div>
+  <div class="queue-info" id="queue-info"></div>
+</div>
+
+<!-- JACKPOT PANEL -->
+<div id="jp-panel" class="panel">
+  <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">X</button>
+  <h2 style="text-align:center">JACKPOT HAND PAY</h2>
+  <p style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm);margin-bottom:4px">Patron won:</p>
+  <div class="jp-amount" id="jp-amount">$0.00</div>
+  <button class="btn-jp" onclick="confirmJackpay()">Hand Pay</button>
+</div>
+
+<!-- DAY END MODAL -->
+<div id="day-end-modal">
+  <div id="day-end-box">
+    <h2 id="ded-day">Day 1 Summary</h2>
+    <div class="ded-row">
+      <span class="ded-label">Patrons visited</span>
+      <span class="ded-val" id="ded-patrons">0</span>
     </div>
-    <div class="ctrl-group">
-      <button class="ctrl-btn" id="rotate-btn" onclick="rotatePlacement()" title="Rotate placement (R)">🔄 Rotate</button>
-      <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1×</button>
-      <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2×</button>
-      <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3×</button>
-      <button class="ctrl-btn" onclick="openMinigame()">🎰 Play</button>
+    <div class="ded-row">
+      <span class="ded-label">Money collected (bets)</span>
+      <span class="ded-val" id="ded-moneyIn">$0.00</span>
     </div>
-  </div>
-
-  <!-- Carrying indicator -->
-  <div id="carry-bar"></div>
-
-  <!-- Place cancel -->
-  <button id="place-cancel-btn" class="ctrl-btn danger" onclick="exitPlacementMode()">✕ Cancel Placement</button>
-
-  <!-- Cashier alert -->
-  <div id="cashier-alert">
-    <div class="cashier-badge" onclick="openCashierPanel()">💵 Patron waiting — tap to serve</div>
-  </div>
-
-  <!-- Drag ghost -->
-  <div id="drag-ghost"></div>
-
-  <!-- Hotbar -->
-  <div id="hotbar"><div id="hotbar-scroll"></div></div>
-
-  <!-- Upgrade Panel -->
-  <div id="upgrade-panel" class="panel">
-    <button class="panel-close" onclick="closeUpgradePanel()">✕</button>
-    <h2 id="upg-title">Machine</h2>
-    <div class="mstat-grid" id="mstats"></div>
-    <div id="upg-options"></div>
-    <button class="btn-sell" onclick="sellSelected()">Sell (50% value)</button>
-  </div>
-
-  <!-- Cashier Panel -->
-  <div id="cashier-panel" class="panel">
-    <button class="panel-close" onclick="closeCashierPanel()">✕</button>
-    <h2>💵 Cashier Window</h2>
-    <div class="patron-name" id="cpat-name">Patron</div>
-    <div class="ticket-amt" id="ctick">$0.00</div>
-    <div class="till-wrap">
-      <div class="till-lbl">Your Till — click to add to tray</div>
-      <div class="till-section-label">Bills</div>
-      <div class="till-bills" id="till-bills"></div>
-      <div class="till-section-label">Coins</div>
-      <div class="till-bills" id="till-coins"></div>
+    <div class="ded-row">
+      <span class="ded-label">Payouts (tickets)</span>
+      <span class="ded-val" id="ded-moneyOut">$0.00</span>
     </div>
-    <div class="till-lbl" style="padding:0 2px 4px">Payment Tray</div>
-    <div class="pay-area" id="pay-area"><span class="pay-placeholder">Add bills or coins…</span></div>
-    <div class="pay-total" id="pay-total">Tray: $0.00 / Owed: $0.00</div>
-    <div class="cashier-btns">
-      <button class="btn-pay" onclick="confirmPay()">✓ Pay</button>
-      <button class="btn-auto" onclick="autoPay()">⚡ Auto</button>
-      <button class="btn-clr" onclick="clearTray()">✕</button>
+    <div class="ded-row">
+      <span class="ded-label">Jackpots paid</span>
+      <span class="ded-val" id="ded-jackpots">$0.00</span>
     </div>
-    <div class="queue-info" id="queue-info"></div>
-  </div>
-
-  <!-- Jackpot Panel -->
-  <div id="jp-panel" class="panel">
-    <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">✕</button>
-    <h2 style="text-align:center">🏆 JACKPOT HAND PAY</h2>
-    <p style="text-align:center;color:var(--text-muted);font-size:12px;margin-bottom:4px">Patron won:</p>
-    <div class="jp-amount" id="jp-amount">$0.00</div>
-    <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-bottom:8px">Pay out from your balance</p>
-    <button class="btn-jp" onclick="confirmJackpay()">✓ HAND PAY</button>
-  </div>
-
-  <!-- Dropped Money Panel -->
-  <div id="dm-panel" class="panel">
-    <button class="panel-close" onclick="document.getElementById('dm-panel').style.display='none'">✕</button>
-    <h2 style="text-align:center">💰 Found Money</h2>
-    <p style="text-align:center;color:var(--gold-light);font-size:22px;font-family:'Playfair Display',serif;margin:6px 0" id="dm-amount">$0.00</p>
-    <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-bottom:2px">A patron dropped this. What will you do?</p>
-    <div class="dm-choices">
-      <button class="dm-btn" onclick="collectDropped('keep')">😈 Keep it ($$$)</button>
-      <button class="dm-btn" onclick="collectDropped('lostandfound')">📦 Lost &amp; Found</button>
-      <button class="dm-btn" onclick="collectDropped('charity')">❤️ Donate to Charity</button>
+    <div class="ded-row">
+      <span class="ded-label">Staff wages</span>
+      <span class="ded-val" id="ded-wages">$0.00</span>
     </div>
-  </div>
-
-  <!-- Mini-game Panel -->
-  <div id="mg-panel" class="panel">
-    <button class="panel-close" onclick="closeMinigame()">✕</button>
-    <h2 style="text-align:center">🎰 Try Your Luck</h2>
-    <canvas id="mg-canvas" width="340" height="100"></canvas>
-    <div class="mg-controls">
-      <button class="mg-btn" onclick="mgSetBet(-5)">−$5</button>
-      <button class="mg-btn" onclick="mgSetBet(-1)">−$1</button>
-      <span style="color:var(--gold-light);font-size:16px;font-weight:700;min-width:60px;text-align:center" id="mg-bet">$5</span>
-      <button class="mg-btn" onclick="mgSetBet(1)">+$1</button>
-      <button class="mg-btn" onclick="mgSetBet(5)">+$5</button>
+    <div class="ded-row">
+      <span class="ded-label">Tips earned</span>
+      <span class="ded-val" id="ded-tips">$0.00</span>
     </div>
-    <button class="mg-spin" id="mg-spin-btn" onclick="mgSpin()">SPIN</button>
-    <div id="mg-result"></div>
-    <div class="payout-table">
-      <div class="payout-row">7 = <span>8×</span></div>
-      <div class="payout-row">💎 = <span>5×</span></div>
-      <div class="payout-row">⭐ = <span>3×</span></div>
-      <div class="payout-row">BAR = <span>2.5×</span></div>
-      <div class="payout-row">🔔 = <span>2×</span></div>
-      <div class="payout-row">🍊 = <span>1.5×</span></div>
+    <div class="ded-net-row">
+      <span class="ded-net-label">Net profit</span>
+      <span class="ded-net-val" id="ded-net">$0.00</span>
     </div>
-  </div>
-
-  <!-- Toasts -->
-  <div id="toasts"></div>
-
-  <!-- Tutorial -->
-  <div id="tutorial">
-    <div id="tbox">
-      <div class="big-icon">🎰</div>
-      <h1>Casino Empire</h1>
-      <div class="sub">A pixel-art casino management sim</div>
-      <div class="tip"><strong>📲 Mobile Placement</strong> — Tap a hotbar item to select it, then tap the floor to place. Use 🔄 Rotate to change direction.</div>
-      <div class="tip"><strong>🖱 Desktop</strong> — Drag items from the hotbar directly onto the floor</div>
-      <div class="tip"><strong>💰 Economy</strong> — Collect bets. Pay winning tickets at Cashier Window</div>
-      <div class="tip"><strong>🏆 Jackpots</strong> — Big wins need a hand-pay! Tap the flashing machine</div>
-      <div class="tip"><strong>🍺 Bar & Staff</strong> — Place a Bar to serve drinks. Hire staff to automate tasks</div>
-      <div class="tip"><strong>💸 Dropped Money</strong> — Patrons sometimes drop coins. Tap to collect!</div>
-      <button class="btn-start" onclick="startGame()">Open the Doors!</button>
+    <div id="ded-found-sect" style="display:none">
+      <h3>Found Money: <span id="ded-found-amt">$0.00</span></h3>
+      <p>You swept up dropped money today. What to do with it?</p>
+      <div class="ded-choices">
+        <button class="ded-choice" onclick="closeDayEndModal('keep')">Keep it (add to balance)</button>
+        <button class="ded-choice" onclick="closeDayEndModal('lostandfound')">Lost and Found</button>
+        <button class="ded-choice" onclick="closeDayEndModal('charity')">Donate to charity</button>
+      </div>
     </div>
+    <button class="btn-next-day" onclick="closeDayEndModal('none')">Start Day <span id="ded-next-day">2</span></button>
   </div>
+</div>
 
-  <!-- Scripts (order matters) -->
-  <script src="js/config.js"></script>
-  <script src="js/state.js"></script>
-  <script src="js/render.js"></script>
-  <script src="js/sprites.js"></script>
-  <script src="js/patrons.js"></script>
-  <script src="js/employees.js"></script>
-  <script src="js/machines.js"></script>
-  <script src="js/cashier.js"></script>
-  <script src="js/food.js"></script>
-  <script src="js/minigame.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/game.js"></script>
+<!-- SURVEILLANCE PANEL -->
+<div id="surv-panel" class="panel">
+  <button class="panel-close" onclick="closeSurveillancePanel()">X</button>
+  <h2>Surveillance Room</h2>
+  <p style="color:var(--text-muted);font-size:var(--fs-xs);margin-bottom:6px">Live feeds. Warning icon = dropped money detected.</p>
+  <div id="surv-grid"></div>
+</div>
+
+<!-- MINIGAME PANEL -->
+<div id="mg-panel" class="panel">
+  <button class="panel-close" onclick="closeMinigame()">X</button>
+  <h2 style="text-align:center">Try Your Luck</h2>
+  <canvas id="mg-canvas" width="300" height="88"></canvas>
+  <div class="mg-controls">
+    <button class="mg-btn" onclick="mgSetBet(-5)">-$5</button>
+    <button class="mg-btn" onclick="mgSetBet(-1)">-$1</button>
+    <span style="color:var(--gold-light);font-size:var(--fs-lg);font-weight:700;min-width:52px;text-align:center" id="mg-bet">$5</span>
+    <button class="mg-btn" onclick="mgSetBet(1)">+$1</button>
+    <button class="mg-btn" onclick="mgSetBet(5)">+$5</button>
+  </div>
+  <button class="mg-spin" id="mg-spin-btn" onclick="mgSpin()">SPIN</button>
+  <div id="mg-result"></div>
+  <div class="payout-table">
+    <div class="payout-row">7 = <span>8x</span></div>
+    <div class="payout-row">Diamond = <span>5x</span></div>
+    <div class="payout-row">Star = <span>3x</span></div>
+    <div class="payout-row">BAR = <span>2.5x</span></div>
+    <div class="payout-row">Bell = <span>2x</span></div>
+    <div class="payout-row">Orange = <span>1.5x</span></div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<!-- TUTORIAL -->
+<div id="tutorial">
+  <div id="tbox">
+    <div class="big-icon">🎰</div>
+    <h1>Casino Empire</h1>
+    <div class="sub">A pixel-art casino management sim</div>
+    <div class="tip"><strong>Placement</strong> — Tap a hotbar item then tap the floor. The rotate button or the handle on the ghost changes direction. Confirm by tapping the floor, Cancel keeps it on cursor.</div>
+    <div class="tip"><strong>Move machines</strong> — Tap any placed machine, then tap Move in the info panel.</div>
+    <div class="tip"><strong>Economy</strong> — You collect all bets instantly. Pay winning tickets at the Cashier Window or Kiosk.</div>
+    <div class="tip"><strong>Jackpots</strong> — Large wins flash the machine. Tap it to hand-pay the patron!</div>
+    <div class="tip"><strong>Dropped Money</strong> — Drag or swipe across coins on the floor to sweep them up. At day end choose what to do.</div>
+    <div class="tip"><strong>Bar and Staff</strong> — Place a Bar to let patrons order drinks. Hire staff to automate tasks. Wages paid daily.</div>
+    <div class="tip"><strong>Surveillance</strong> — Place a Surveillance Room, tap it to see live reel feeds and detect dropped money by camera.</div>
+    <button class="btn-start" onclick="startGame()">Open the Doors!</button>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/render.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/patrons.js"></script>
+<script src="js/employees.js"></script>
+<script src="js/machines.js"></script>
+<script src="js/cashier.js"></script>
+<script src="js/food.js"></script>
+<script src="js/minigame.js"></script>
+<script src="js/input.js"></script>
+<script src="js/game.js"></script>
+
 </body>
 </html>

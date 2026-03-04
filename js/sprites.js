@@ -17,11 +17,12 @@ function drawMachine(m) {
   const dw=def.w*TILE, dh=def.h*TILE;
   const ox=-dw/2, oy=-dh/2;
 
-  if(def.isSlot)        drawSlotSprite(m,def,ox,oy,dw,dh);
-  else if(def.isKiosk)  drawKioskSprite(m,def,ox,oy,dw,dh);
-  else if(def.isCashier)drawCashierSprite(m,def,ox,oy,dw,dh);
-  else if(def.isBar)    drawBarSprite(m,def,ox,oy,dw,dh);
-  else if(def.isTable)  drawTableSprite(m,def,ox,oy,dw,dh);
+  if(def.isSlot)             drawSlotSprite(m,def,ox,oy,dw,dh);
+  else if(def.isKiosk)       drawKioskSprite(m,def,ox,oy,dw,dh);
+  else if(def.isCashier)     drawCashierSprite(m,def,ox,oy,dw,dh);
+  else if(def.isBar)         drawBarSprite(m,def,ox,oy,dw,dh);
+  else if(def.isTable)       drawTableSprite(m,def,ox,oy,dw,dh);
+  else if(def.isSurveillance)drawSurveillanceSprite(m,def,ox,oy,dw,dh);
 
   ctx.restore();
 
@@ -96,9 +97,9 @@ function drawSlotSprite(m,def,x,y,w,h) {
 // ── Reel animation ─────────────────────────
 function initMachineReels(m) {
   m._reels=[
-    {pos:0,speed:0,stopped:true,target:0},
-    {pos:0,speed:0,stopped:true,target:0},
-    {pos:0,speed:0,stopped:true,target:0}
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0},
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0},
+    {pos:0,speed:0,stopped:true,target:0,stopAt:0}
   ];
 }
 
@@ -106,85 +107,65 @@ function drawSlotReels(m,rx,ry,rw,rh) {
   const reels=m._reels||[];
   if(!reels.length) return;
   const reelW=(rw-4)/3, reelH=rh;
+  const SC=REEL_SYMBOLS.length;
 
   for(let i=0;i<3;i++) {
     const r=reels[i]||{pos:0,stopped:true};
     const rx2=rx+i*(reelW+2);
 
-    // Reel bg
     ctx.fillStyle='#0a100a'; ctx.fillRect(rx2,ry,reelW,reelH);
-
-    // Clip to reel window
     ctx.save();
     ctx.beginPath(); ctx.rect(rx2,ry,reelW,reelH); ctx.clip();
 
-    // Draw 3 symbols (previous, current, next)
-    const symH=reelH*.95;
+    const symH=reelH*.92;
     const frac=r.pos%1;
     for(let j=-1;j<=1;j++) {
-      const idx=((Math.floor(r.pos)+j+REEL_SYMBOLS.length*100)%REEL_SYMBOLS.length);
+      const idx=((Math.floor(r.pos)+j)%SC+SC*100)%SC;
       const sym=REEL_SYMBOLS[idx];
       const col=REEL_COLORS[idx];
       const sy=ry+(j-frac+.5)*symH+symH*.5;
-
-      // Symbol bg highlight for center
-      if(r.stopped && j===0) {
-        ctx.fillStyle='rgba(255,255,255,.06)';
-        ctx.fillRect(rx2,ry+symH*.25,reelW,symH*.5);
-      }
-
-      // Draw symbol text
+      const isCenter=r.stopped&&j===0;
       ctx.fillStyle=col;
-      ctx.font=`bold ${Math.floor(symH*.45)}px monospace`;
+      ctx.font=`bold ${Math.floor(symH*.44)}px monospace`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.shadowColor=col; ctx.shadowBlur=r.stopped&&j===0?4:0;
+      if(isCenter){ctx.shadowColor=col;ctx.shadowBlur=5;}
       ctx.fillText(sym,rx2+reelW/2,sy);
       ctx.shadowBlur=0;
     }
-
     ctx.restore();
 
-    // Reel divider lines
+    ctx.strokeStyle='rgba(255,220,0,.3)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(rx2,ry+reelH*.35); ctx.lineTo(rx2+reelW,ry+reelH*.35);
+    ctx.moveTo(rx2,ry+reelH*.65); ctx.lineTo(rx2+reelW,ry+reelH*.65);
+    ctx.stroke(); ctx.setLineDash([]);
     ctx.strokeStyle='rgba(255,255,255,.15)'; ctx.lineWidth=1;
     ctx.strokeRect(rx2,ry,reelW,reelH);
-
-    // Center payline highlight
-    ctx.strokeStyle='rgba(255,220,0,.35)'; ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.moveTo(rx2,ry+reelH/2-symH*.25);
-    ctx.lineTo(rx2+reelW,ry+reelH/2-symH*.25);
-    ctx.moveTo(rx2,ry+reelH/2+symH*.25);
-    ctx.lineTo(rx2+reelW,ry+reelH/2+symH*.25);
-    ctx.stroke();
   }
 
-  // Payline center marker
-  ctx.strokeStyle='rgba(255,220,0,.5)'; ctx.lineWidth=1.5;
-  ctx.setLineDash([3,3]);
+  // Payline
+  ctx.strokeStyle='rgba(255,200,0,.45)'; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(rx,ry+reelH/2); ctx.lineTo(rx+rw,ry+reelH/2); ctx.stroke();
-  ctx.setLineDash([]);
 }
 
 function updateMachineReels(dt) {
+  const now=Date.now();
   for(const m of G.machines) {
     if(!m._reels) continue;
-    const spinning=m._reels.some(r=>!r.stopped);
-    if(!spinning) continue;
-    for(let i=0;i<3;i++) {
-      const r=m._reels[i];
+    for(const r of m._reels) {
       if(r.stopped) continue;
-      r.pos+=r.speed*dt/1000;
-      if(r.speed>0) {
-        // Decelerating stop
-        const dist=r.target+Math.ceil(r.pos)-r.pos;
-        if(r.speed<0.5 && dist<0.15) {
-          r.pos=r.target+Math.ceil(r.pos-r.target%1);
-          // Snap to exact integer
-          r.pos=Math.round(r.pos);
-          r.stopped=true; r.speed=0;
+      if(now>=r.stopAt) {
+        const remaining=r.target-r.pos;
+        if(remaining<=0.04) {
+          r.pos=r.target;
+          r.stopped=true;
+          r.speed=0;
         } else {
-          r.speed=Math.max(0.4,r.speed-r.speed*dt*.003);
+          r.speed=Math.max(1.0,remaining*2.5);
+          r.pos+=r.speed*dt/1000;
         }
+      } else {
+        r.pos+=r.speed*dt/1000;
       }
     }
   }
@@ -192,16 +173,17 @@ function updateMachineReels(dt) {
 
 function startMachineReels(m,result) {
   if(!m._reels) initMachineReels(m);
-  const symIndices=result.map(sym=>REEL_SYMBOLS.indexOf(sym));
-  const speeds=[12,11,10];
-  const delays=[0,400,800];
+  const SC=REEL_SYMBOLS.length;
+  const now=Date.now();
+  const stopDelays=[1800,2300,2800];
   m._reels.forEach((r,i)=>{
+    const targetSym=REEL_SYMBOLS.indexOf(result[i]);
+    const curSym=Math.round(r.pos)%SC;
+    const advance=(targetSym-curSym+SC)%SC;
+    r.target=Math.round(r.pos)+6*SC+advance;
+    r.speed=14;
     r.stopped=false;
-    r.speed=speeds[i];
-    const base=Math.round(r.pos)+8;
-    r.target=base+(symIndices[i]>=0?symIndices[i]:Math.floor(Math.random()*REEL_SYMBOLS.length));
-    // Stagger stop
-    setTimeout(()=>{ r.speed=0.5; },1800+delays[i]);
+    r.stopAt=now+stopDelays[i];
   });
 }
 
@@ -322,6 +304,34 @@ function drawBarSprite(m,def,x,y,w,h) {
   ctx.fillStyle='rgba(255,255,255,.4)'; ctx.font='bold 5px monospace';
   ctx.textAlign='center'; ctx.textBaseline='bottom';
   ctx.fillText('BAR & GRILL',x+w/2,y+h-3);
+}
+
+// ── Surveillance Room Sprite ───────────────
+function drawSurveillanceSprite(m,def,x,y,w,h) {
+  const g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,'#1a2840'); g.addColorStop(1,'#0c1620');
+  ctx.fillStyle=g; prect(x+2,y+2,w-4,h-4,5); ctx.fill();
+  ctx.strokeStyle=G.selectedMid===m.id?'#f0d080':'rgba(80,160,255,.3)';
+  ctx.lineWidth=G.selectedMid===m.id?2:1;
+  prect(x+2,y+2,w-4,h-4,5); ctx.stroke();
+
+  // Mini monitor screens
+  const cols=2,rows=2,pad=6,sw=(w-pad*3)/cols,sh=(h-pad*3)/rows;
+  for(let row=0;row<rows;row++) for(let col=0;col<cols;col++) {
+    const sx2=x+pad+col*(sw+pad), sy2=y+pad+row*(sh+pad);
+    ctx.fillStyle='#030a06'; ctx.fillRect(sx2,sy2,sw,sh);
+    ctx.strokeStyle='rgba(0,200,80,.25)'; ctx.lineWidth=.5; ctx.strokeRect(sx2,sy2,sw,sh);
+    // Scanline
+    ctx.fillStyle='rgba(0,200,80,.06)';
+    for(let sl=0;sl<sh;sl+=2) ctx.fillRect(sx2,sy2+sl,sw,1);
+    // Camera icon
+    ctx.fillStyle='rgba(0,200,80,.5)'; ctx.font='7px serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('📷',sx2+sw/2,sy2+sh/2);
+  }
+  ctx.fillStyle='rgba(0,200,80,.5)'; ctx.font='bold 5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('SURVEILLANCE',x+w/2,y+h-3);
 }
 
 // ── Table Sprite ───────────────────────────

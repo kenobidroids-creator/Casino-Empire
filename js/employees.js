@@ -6,7 +6,7 @@ function hireEmployee(type) {
   const def=EMPLOYEE_DEFS[type];
   if(G.money<def.cost){toast('Need $'+def.cost+' to hire '+def.name,'r');return;}
   G.money-=def.cost;
-  const wp=tile2world(ENT_TX,ENT_TY);
+  const wp=tile2world(ENT_TX(),ENT_TY());
   const names=['Sam','Pat','Alex','Morgan','Jordan','Taylor','Casey','Robin'];
   G.employees.push({
     id:G.nextEid++,
@@ -199,6 +199,8 @@ function deliverFood(e) {
 
 function resolveJackpot(j) {
   G.money-=j.amount;
+  G.dayStats.jackpotsPaid=(G.dayStats.jackpotsPaid||0)+j.amount;
+  G.dayStats.moneyOut=(G.dayStats.moneyOut||0)+j.amount;
   G.jackpots=G.jackpots.filter(x=>x.id!==j.id);
   const patron=G.patrons.find(p=>p.id===j.patronId);
   if(patron) {
