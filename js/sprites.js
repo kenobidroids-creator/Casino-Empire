@@ -21,8 +21,11 @@ function drawMachine(m) {
   else if(def.isKiosk)       drawKioskSprite(m,def,ox,oy,dw,dh);
   else if(def.isCashier)     drawCashierSprite(m,def,ox,oy,dw,dh);
   else if(def.isBar)         drawBarSprite(m,def,ox,oy,dw,dh);
+  else if(def.isTable&&def.tableGame) drawNewMachineSprite(m,def,ox,oy,dw,dh);
   else if(def.isTable)       drawTableSprite(m,def,ox,oy,dw,dh);
   else if(def.isSurveillance)drawSurveillanceSprite(m,def,ox,oy,dw,dh);
+  else if(def.isSecurity)    drawSecuritySprite(m,def,ox,oy,dw,dh);
+  else                       drawNewMachineSprite(m,def,ox,oy,dw,dh);
 
   ctx.restore();
 
@@ -334,6 +337,39 @@ function drawSurveillanceSprite(m,def,x,y,w,h) {
   ctx.fillText('SURVEILLANCE',x+w/2,y+h-3);
 }
 
+// ── Security Desk Sprite ───────────────────
+function drawSecuritySprite(m,def,x,y,w,h) {
+  const sel=G.selectedMid===m.id;
+  const hasVisitor=G.lostAndFoundVisitors&&G.lostAndFoundVisitors.some(v=>v.machineId===m.id);
+
+  const g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,'#1e3040'); g.addColorStop(1,'#0c1820');
+  ctx.fillStyle=g; prect(x+2,y+2,w-4,h-4,5); ctx.fill();
+  ctx.strokeStyle=sel?'#f0d080':hasVisitor?'#60e060':'rgba(80,160,255,.3)';
+  ctx.lineWidth=sel||hasVisitor?2:1;
+  prect(x+2,y+2,w-4,h-4,5); ctx.stroke();
+
+  // Shield emblem
+  ctx.fillStyle='rgba(80,160,255,.25)';
+  ctx.beginPath();
+  ctx.moveTo(x+w/2,y+8); ctx.lineTo(x+w-10,y+14);
+  ctx.lineTo(x+w-10,y+h*.55); ctx.quadraticCurveTo(x+w/2,y+h*.75,x+10,y+h*.55);
+  ctx.lineTo(x+10,y+14); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(80,160,255,.5)'; ctx.lineWidth=1;
+  ctx.stroke();
+
+  // Active visitor indicator
+  if(hasVisitor) {
+    ctx.fillStyle='rgba(80,255,80,.85)'; ctx.font='bold 7px monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText('PATRON WAITING',x+w/2,y+h*.6);
+  }
+
+  ctx.fillStyle='rgba(100,180,255,.6)'; ctx.font='bold 5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('SECURITY',x+w/2,y+h-3);
+}
+
 // ── Table Sprite ───────────────────────────
 function drawTableSprite(m,def,x,y,w,h) {
   // Table surface
@@ -491,4 +527,276 @@ function drawEmployee(e) {
     ctx.font='11px serif'; ctx.textBaseline='middle'; ctx.textAlign='center';
     ctx.fillText(fi?.icon||'📦',x+10,y-2);
   }
+}
+
+// ════════════════════════════════════════════
+//  NEW MACHINE SPRITES
+// ════════════════════════════════════════════
+
+// ── Band Stage ─────────────────────────────
+function drawBandSprite(m,def,x,y,w,h) {
+  const t=Date.now();
+  const beat=(t%800)/800;  // 0..1 per beat
+
+  // Stage floor
+  const sg=ctx.createLinearGradient(x,y+h*.6,x,y+h);
+  sg.addColorStop(0,'#2a1a08'); sg.addColorStop(1,'#1a0e04');
+  ctx.fillStyle=sg; ctx.fillRect(x,y+h*.6,w,h*.4);
+
+  // Backdrop curtain
+  ctx.fillStyle='#380010'; ctx.fillRect(x+2,y+2,w-4,h*.62);
+  // Curtain folds
+  for(let i=0;i<5;i++){
+    ctx.fillStyle=i%2===0?'#4a0018':'#300010';
+    ctx.fillRect(x+2+i*(w-4)/5,y+2,(w-4)/5,h*.62);
+  }
+
+  // Stage lights (animated)
+  const lightCols=['#ff6060','#6060ff','#60ff60','#ffff60'];
+  for(let i=0;i<3;i++){
+    const lx=x+w*.2+i*w*.3, ly=y+4;
+    const on=((t+i*200)%600)<300;
+    ctx.fillStyle=on?lightCols[i]:lightCols[i].replace(/[0-9a-f]{2}/gi,'22');
+    ctx.beginPath(); ctx.arc(lx,ly,4,0,Math.PI*2); ctx.fill();
+    if(on){ctx.shadowColor=lightCols[i];ctx.shadowBlur=8;}
+    ctx.fillStyle=on?'rgba(255,255,255,.15)':'rgba(0,0,0,0)';
+    ctx.beginPath();
+    ctx.moveTo(lx,ly+4); ctx.lineTo(lx-10,y+h*.58); ctx.lineTo(lx+10,y+h*.58);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+  }
+
+  // Band members (3 animated figures)
+  const bop=Math.sin(beat*Math.PI*2)*2;
+  const members=[
+    {cx:w*.25,ic:'🎸',c:'#e04040'},
+    {cx:w*.5, ic:'🎹',c:'#4080e0'},
+    {cx:w*.75,ic:'🎺',c:'#e0a040'},
+  ];
+  for(const bm of members){
+    const bx=x+bm.cx, by=y+h*.4+bop;
+    ctx.fillStyle=bm.c; ctx.font=`${Math.floor(h*.14)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(bm.ic,bx,by);
+  }
+
+  // Label
+  ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('LIVE BAND',x+w/2,y+h-2);
+}
+
+// ── Sportsbook ─────────────────────────────
+function drawSportsbookSprite(m,def,x,y,w,h) {
+  const g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,'#062810'); g.addColorStop(1,'#030e06');
+  ctx.fillStyle=g; prect(x+1,y+1,w-2,h-2,4); ctx.fill();
+  ctx.strokeStyle='rgba(60,200,80,.25)'; ctx.lineWidth=1;
+  prect(x+1,y+1,w-2,h-2,4); ctx.stroke();
+
+  // Big screen
+  const sx2=x+4, sy2=y+4, sw=w-8, sh=h*.58;
+  ctx.fillStyle='#040e08'; ctx.fillRect(sx2,sy2,sw,sh);
+  ctx.strokeStyle='rgba(60,200,80,.3)'; ctx.lineWidth=.5; ctx.strokeRect(sx2,sy2,sw,sh);
+  ctx.fillStyle='rgba(60,200,80,.04)';
+  for(let ln=0;ln<sh;ln+=2) ctx.fillRect(sx2,sy2+ln,sw,1);
+  // Score display
+  ctx.fillStyle='rgba(60,200,80,.8)'; ctx.font=`bold ${Math.floor(sw*.09)}px monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const ev=m._lastEvent||'Sports Betting';
+  ctx.fillText(ev.substring(0,16),sx2+sw/2,sy2+sh*.35);
+  ctx.font=`${Math.floor(sw*.07)}px monospace`;
+  ctx.fillStyle='rgba(60,200,80,.45)';
+  ctx.fillText('LIVE ODDS  2.1  1.8',sx2+sw/2,sy2+sh*.65);
+
+  // Counter
+  ctx.fillStyle='#102818'; ctx.fillRect(x+2,y+h*.65,w-4,h*.32);
+  ctx.fillStyle='rgba(60,200,80,.5)'; ctx.font='bold 5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('SPORTSBOOK',x+w/2,y+h-2);
+}
+
+// ── TV Screen ──────────────────────────────
+function drawTvScreenSprite(m,def,x,y,w,h) {
+  const t=Date.now();
+  ctx.fillStyle='#08080c'; prect(x+2,y+2,w-4,h-4,4); ctx.fill();
+  ctx.strokeStyle='rgba(80,120,200,.3)'; ctx.lineWidth=1;
+  prect(x+2,y+2,w-4,h-4,4); ctx.stroke();
+
+  // Screen
+  const sx2=x+5,sy2=y+5,sw=w-10,sh=h-14;
+  ctx.fillStyle='#04080c'; ctx.fillRect(sx2,sy2,sw,sh);
+  // Animated content
+  ctx.fillStyle='rgba(80,120,200,.05)';
+  for(let ln=0;ln<sh;ln+=2) ctx.fillRect(sx2,sy2+ln,sw,1);
+  // Channel number
+  ctx.fillStyle='rgba(80,120,200,.6)'; ctx.font=`bold ${Math.floor(sw*.3)}px monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(m._channel||'📺',sx2+sw/2,sy2+sh*.4);
+  // Stand
+  ctx.fillStyle='#141418'; ctx.fillRect(x+w*.35,y+h-6,w*.3,4);
+  ctx.fillRect(x+w*.2,y+h-4,w*.6,3);
+}
+
+// ── Blackjack Table ─────────────────────────
+function drawBlackjackSprite(m,def,x,y,w,h) {
+  // Green felt
+  const g=ctx.createRadialGradient(x+w/2,y+h/2,4,x+w/2,y+h/2,w*.7);
+  g.addColorStop(0,'#0a4020'); g.addColorStop(1,'#062810');
+  ctx.fillStyle=g; prect(x+3,y+3,w-6,h-6,8); ctx.fill();
+  ctx.strokeStyle='#d4a820'; ctx.lineWidth=1.5;
+  prect(x+3,y+3,w-6,h-6,8); ctx.stroke();
+
+  const ts=TABLE_STATES[m.id];
+  const phase=ts?.phase||'betting';
+
+  // Dealer area (top third)
+  ctx.strokeStyle='rgba(212,168,32,.3)'; ctx.lineWidth=.5;
+  ctx.beginPath(); ctx.ellipse(x+w/2,y+h*.25,w*.35,h*.12,0,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='rgba(212,168,32,.15)'; ctx.fill();
+
+  // Draw dealer cards if available
+  if(ts?.dealerCards?.length) {
+    drawMiniCards(ts.dealerCards, x+w/2, y+h*.22, ts.dealerRevealed);
+  }
+
+  // Player arc seats
+  const seats=def.seats||5;
+  for(let i=0;i<seats;i++){
+    const a=(i/(seats-1))*(Math.PI*.8)+Math.PI*.1;
+    const sx2=x+w/2+Math.cos(a)*w*.4;
+    const sy2=y+h*.65+Math.sin(a)*h*.22;
+    const pl=ts?.players?.find(p=>ts.players.indexOf(p)===i);
+    ctx.fillStyle=pl?'rgba(212,168,32,.3)':'rgba(255,255,255,.06)';
+    ctx.beginPath(); ctx.ellipse(sx2,sy2,10,6,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(212,168,32,.2)'; ctx.lineWidth=.5; ctx.stroke();
+    if(pl?.cards?.length) drawMiniCards(pl.cards,sx2,sy2+4,true,0.7);
+  }
+
+  ctx.fillStyle='rgba(212,168,32,.5)'; ctx.font='bold 5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('BLACKJACK  '+(ts?.players?.length||0)+'/'+seats,x+w/2,y+h-3);
+}
+
+// ── Roulette Table ──────────────────────────
+function drawRouletteSprite(m,def,x,y,w,h) {
+  const g=ctx.createRadialGradient(x+w/2,y+h*.4,4,x+w/2,y+h*.4,w*.6);
+  g.addColorStop(0,'#1a0006'); g.addColorStop(1,'#0a0004');
+  ctx.fillStyle=g; prect(x+3,y+3,w-6,h-6,8); ctx.fill();
+  ctx.strokeStyle='#d4a820'; ctx.lineWidth=1.5;
+  prect(x+3,y+3,w-6,h-6,8); ctx.stroke();
+
+  const ts=TABLE_STATES[m.id];
+  const wheelAngle=ts?.wheelAngle||0;
+  const ballAngle=ts?.ballAngle||0;
+
+  // Wheel
+  const wx=x+w/2, wy=y+h*.38, wr=Math.min(w,h)*.26;
+  ctx.save();
+  ctx.translate(wx,wy); ctx.rotate(wheelAngle);
+  const nums=ROULETTE_NUMS;
+  for(let i=0;i<nums.length;i++){
+    const a=(i/nums.length)*Math.PI*2;
+    const na=((i+1)/nums.length)*Math.PI*2;
+    ctx.fillStyle=nums[i]===0?'#007000':RED_NUMS.has(nums[i])?'#880000':'#111';
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,wr,a,na); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(212,168,32,.15)'; ctx.lineWidth=.3; ctx.stroke();
+    // Number
+    if(wr>14) {
+      const mid=(a+na)/2, nr=wr*.72;
+      ctx.fillStyle='rgba(255,255,255,.7)'; ctx.font='bold 4px monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(nums[i],Math.cos(mid)*nr,Math.sin(mid)*nr);
+    }
+  }
+  ctx.restore();
+  // Outer ring
+  ctx.strokeStyle='#d4a820'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(wx,wy,wr+2,0,Math.PI*2); ctx.stroke();
+  // Center hub
+  ctx.fillStyle='#d4a820'; ctx.beginPath(); ctx.arc(wx,wy,4,0,Math.PI*2); ctx.fill();
+  // Ball
+  if(ts?.phase==='spinning'||ts?.phase==='result') {
+    const br=wr+5;
+    ctx.fillStyle='#fff'; ctx.beginPath();
+    ctx.arc(wx+Math.cos(ballAngle)*br,wy+Math.sin(ballAngle)*br,2.5,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Betting layout (bottom)
+  const bx=x+4, by=y+h*.7, bw=w-8, bht=h*.22;
+  ctx.fillStyle='rgba(0,100,0,.3)'; ctx.fillRect(bx,by,bw,bht);
+  ctx.strokeStyle='rgba(212,168,32,.2)'; ctx.lineWidth=.5; ctx.strokeRect(bx,by,bw,bht);
+  ctx.fillStyle='rgba(212,168,32,.4)'; ctx.font='5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('RED  /  BLACK',bx+bw/2,by+bht/2);
+
+  ctx.fillStyle='rgba(212,168,32,.5)'; ctx.font='bold 5px monospace';
+  ctx.textBaseline='bottom'; ctx.fillText('ROULETTE',x+w/2,y+h-2);
+}
+
+// ── Poker Table ─────────────────────────────
+function drawPokerSprite(m,def,x,y,w,h) {
+  const g=ctx.createRadialGradient(x+w/2,y+h/2,4,x+w/2,y+h/2,w*.65);
+  g.addColorStop(0,'#0a1f08'); g.addColorStop(1,'#060c04');
+  ctx.fillStyle=g; prect(x+3,y+3,w-6,h-6,10); ctx.fill();
+  ctx.strokeStyle='#d4a820'; ctx.lineWidth=1.5;
+  prect(x+3,y+3,w-6,h-6,10); ctx.stroke();
+
+  const ts=TABLE_STATES[m.id];
+  // Community cards in centre
+  if(ts?.communityCards?.length) {
+    drawMiniCards(ts.communityCards, x+w/2, y+h*.42, true, 0.75);
+  }
+  // Player positions around oval
+  const seats=def.seats||6;
+  for(let i=0;i<seats;i++){
+    const a=(i/seats)*Math.PI*2-Math.PI/2;
+    const sx2=x+w/2+Math.cos(a)*w*.38;
+    const sy2=y+h/2+Math.sin(a)*h*.35;
+    const pl=ts?.players?.find((_,idx)=>idx===i);
+    ctx.fillStyle=pl?'rgba(212,168,32,.3)':'rgba(255,255,255,.05)';
+    ctx.beginPath(); ctx.ellipse(sx2,sy2,9,5,0,0,Math.PI*2); ctx.fill();
+    if(pl?.cards?.length) drawMiniCards(pl.cards,sx2,sy2,true,0.65);
+  }
+
+  ctx.fillStyle='rgba(212,168,32,.5)'; ctx.font='bold 5px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('POKER  '+(ts?.players?.length||0)+'/'+seats,x+w/2,y+h-3);
+}
+
+// ── Helper: draw mini card faces ────────────
+function drawMiniCards(cards, cx2, cy2, revealed, scale=1) {
+  const cw=10*scale, ch=14*scale;
+  const startX=cx2-(cards.length*cw*.55);
+  for(let i=0;i<cards.length&&i<5;i++){
+    const cx3=startX+i*cw*.85;
+    ctx.fillStyle=revealed?'#f8f0e0':'#1a3a6a';
+    prect(cx3-cw/2,cy2-ch/2,cw,ch,1); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=.5;
+    prect(cx3-cw/2,cy2-ch/2,cw,ch,1); ctx.stroke();
+    if(revealed&&cards[i]){
+      const isRed=cards[i].s==='♥'||cards[i].s==='♦';
+      ctx.fillStyle=isRed?'#cc0000':'#111';
+      ctx.font=`bold ${Math.floor(4.5*scale)}px monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(cards[i].r+cards[i].s,cx3,cy2);
+    }
+  }
+}
+
+// ── Wire new sprites into drawMachine ───────
+// (Called from the existing drawMachine dispatch already handles isBand etc
+//  only if we add them — patch the dispatch here)
+const _origDrawMachineInner = null; // patched below via monkey-patch
+
+function drawNewMachineSprite(m, def, ox, oy, dw, dh) {
+  if(def.isBand)          drawBandSprite(m,def,ox,oy,dw,dh);
+  else if(def.isSportsbook)drawSportsbookSprite(m,def,ox,oy,dw,dh);
+  else if(def.isTvScreen)  drawTvScreenSprite(m,def,ox,oy,dw,dh);
+  else if(def.tableGame==='blackjack') drawBlackjackSprite(m,def,ox,oy,dw,dh);
+  else if(def.tableGame==='roulette')  drawRouletteSprite(m,def,ox,oy,dw,dh);
+  else if(def.tableGame==='poker')     drawPokerSprite(m,def,ox,oy,dw,dh);
+  else return false;
+  return true;
 }

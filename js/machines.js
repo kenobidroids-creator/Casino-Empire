@@ -15,11 +15,14 @@ function placeMachine(type,tx,ty,rot) {
     if(!validTile(tx+dx,ty+dy)||tileOccupied(tx+dx,ty+dy)){toast('Cannot place here!','r');return false;}
 
   G.money-=def.cost;
-  G.machines.push({
+  const newM = {
     id:G.nextMid++, type, tx, ty, rotation:r,
     upgrades:{speed:0,luck:0,bet:0},
     occupied:null, totalEarned:0
-  });
+  };
+  G.machines.push(newM);
+  // Initialise table game state immediately
+  if(def.tableGame) initTableState(newM);
   toast('Placed '+def.name,'g');
   return true;
 }
@@ -80,7 +83,6 @@ function drawSlotReelsOnCtx(mc,reels,rx,ry,rw,rh){
   mc.beginPath(); mc.moveTo(rx,ry+reelH/2); mc.lineTo(rx+rw,ry+reelH/2); mc.stroke();
 }
 
-// ── Floor expansion ─────────────────────────
 function expandFloor(){
   const nextLevel=G.floorLevel+1;
   if(nextLevel>=FLOOR_LEVELS.length){toast('Already at maximum size!');return;}
@@ -88,6 +90,7 @@ function expandFloor(){
   if(G.money<lv.cost){toast('Need $'+lv.cost.toLocaleString()+' to expand!','r');return;}
   if(!confirm('Expand to '+lv.label+' floor ($'+lv.cost.toLocaleString()+')?')) return;
   G.money-=lv.cost;
+  // Grow right and down so existing machines stay in same position
   G.floorLevel=nextLevel;
   G.floorW=lv.w; G.floorH=lv.h;
   clampCam();
@@ -103,6 +106,8 @@ function openUpgradePanel(mid) {
   document.getElementById('upg-title').textContent=def.icon+' '+def.name;
 
   const sg=document.getElementById('mstats');
+  const rotLabel=['↓S','←W','↑N','→E'][m.rotation||0];
+
   if(def.isSlot) {
     const bl=m.upgrades.bet||0, ll=m.upgrades.luck||0;
     sg.innerHTML=`
@@ -112,25 +117,41 @@ function openUpgradePanel(mid) {
         <div class="mstat-val">${((def.winRate+ll*.02)*100).toFixed(0)}%</div></div>
       <div class="mstat-box"><div class="mstat-lbl">Total Earned</div>
         <div class="mstat-val">$${(m.totalEarned||0).toFixed(2)}</div></div>
-      <div class="mstat-box"><div class="mstat-lbl">Status</div>
-        <div class="mstat-val">${m.occupied!=null?'🟢 Active':'⚪ Idle'}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Facing</div>
+        <div class="mstat-val">${rotLabel}</div></div>
       <div class="mstat-box" style="grid-column:span 2">
         <div class="mstat-lbl">Live Reels</div>
         <canvas id="upg-reel-canvas" width="220" height="50" style="width:100%;border-radius:4px;margin-top:3px;image-rendering:pixelated"></canvas>
       </div>`;
-    // Store reference for live updates
     G._upgPanelMid=mid;
+  } else if(def.tableGame) {
+    const ts=TABLE_STATES[m.id];
+    sg.innerHTML=`
+      <div class="mstat-box"><div class="mstat-lbl">Game</div>
+        <div class="mstat-val">${def.tableGame.charAt(0).toUpperCase()+def.tableGame.slice(1)}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Seats</div>
+        <div class="mstat-val">${ts?ts.players.length:0}/${def.seats}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Total Earned</div>
+        <div class="mstat-val">$${(m.totalEarned||0).toFixed(2)}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Phase</div>
+        <div class="mstat-val">${ts?ts.phase:'—'}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Facing</div>
+        <div class="mstat-val">${rotLabel}</div></div>`;
+    G._upgPanelMid=null;
   } else {
     sg.innerHTML=`
-      <div class="mstat-box"><div class="mstat-lbl">Rotation</div>
-        <div class="mstat-val">${['↓S','←W','↑N','→E'][m.rotation||0]}</div></div>
-      <div class="mstat-box"><div class="mstat-lbl">Cost Paid</div>
-        <div class="mstat-val">$${def.cost}</div></div>`;
+      <div class="mstat-box"><div class="mstat-lbl">Type</div>
+        <div class="mstat-val">${def.name}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Facing</div>
+        <div class="mstat-val">${rotLabel}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Total Earned</div>
+        <div class="mstat-val">$${(m.totalEarned||0).toFixed(2)}</div></div>`;
     G._upgPanelMid=null;
   }
 
   const og=document.getElementById('upg-options');
   og.innerHTML='';
+
   if(def.isSlot) {
     for(const [key,upg] of Object.entries(UPGRADES)) {
       const lv=m.upgrades[key]||0, maxd=lv>=upg.maxLv;
@@ -144,14 +165,14 @@ function openUpgradePanel(mid) {
       og.appendChild(row);
     }
   }
-  // Rotate row
+
   const rRow=document.createElement('div'); rRow.className='upg-row';
-  rRow.innerHTML=`<div class="upg-info"><h4>🔄 Rotate [${['↓S','←W','↑N','→E'][m.rotation||0]}]</h4><p>Change facing direction</p></div>
+  rRow.innerHTML=`<div class="upg-info"><h4>🔄 Rotate [${rotLabel}]</h4><p>Change facing direction</p></div>
     <button class="btn-upg" onclick="rotateSelected()">Rotate</button>`;
   og.appendChild(rRow);
-  // Move row
+
   const mvRow=document.createElement('div'); mvRow.className='upg-row';
-  mvRow.innerHTML=`<div class="upg-info"><h4>✋ Move Machine</h4><p>Drag to a new position</p></div>
+  mvRow.innerHTML=`<div class="upg-info"><h4>✋ Move Machine</h4><p>Pick up and reposition</p></div>
     <button class="btn-upg" onclick="startMoveMode(${mid})">Move</button>`;
   og.appendChild(mvRow);
 
@@ -184,4 +205,9 @@ function sellSelected() {
 function closeUpgradePanel() {
   document.getElementById('upgrade-panel').style.display='none';
   G.selectedMid=null;
+}
+
+// Unified manage panel — same as upgrade panel but open for any machine type
+function openMachineManagePanel(mid) {
+  openUpgradePanel(mid);
 }

@@ -325,10 +325,11 @@ function handleCanvasClick(sx,sy){
       }
     } else {
       if(G.jackpots.find(j=>j.machineId===m.id)){handleJackpotClick(m.id);return;}
-      if(m.type==='cashier')         openCashierPanel();
-      else if(m.type==='bar')        handleBarClick(m.id);
-      else if(m.type==='surveillance')openSurveillancePanel();
-      else                           openUpgradePanel(m.id);
+      // Cashier and bar have primary click actions; long-press (R key) goes to manage
+      if(m.type==='cashier')           openCashierPanel();
+      else if(m.type==='bar')          handleBarClick(m.id);
+      else if(m.type==='surveillance') openSurveillancePanel();
+      else                             openMachineManagePanel(m.id);
     }
     return;
   }
@@ -361,7 +362,10 @@ function buildHotbar(){
   const scroll=document.getElementById('hotbar-scroll');
   scroll.innerHTML='';
   const items=['slot_basic','slot_silver','slot_gold','slot_diamond',
-               'kiosk','cashier','bar','table','surveillance'];
+               'kiosk','cashier','bar','table',
+               'blackjack_table','roulette_table','poker_table',
+               'band','sportsbook','tv_screen',
+               'surveillance','security'];
   for(const type of items) addHotbarMachine(scroll,type);
 
   const sep=document.createElement('div'); sep.className='hotbar-sep';

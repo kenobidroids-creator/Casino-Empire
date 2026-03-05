@@ -19,7 +19,11 @@ const G = {
 
   // Found money collected during the day - player decides what to do at day-end
   collectedMoneyPool: 0,
-  lostAndFoundLog:    [],  // { patronName, amount, day }
+  lostAndFoundLog:     [],  // legacy
+  lostAndFoundContacts:[],  // { id, name, amount, day, phone, status }
+  nextContactId:       1,
+  lostAndFoundVisitors:[],  // returning patrons: { id, patronName, amount, wx, wy, state, machineId }
+  survTabs:            {},  // { machineId: 'topdown'|'firstperson' }
 
   foodOrders:[], nextOrderId:1,
   dirtyItems:[], nextDirtyId:1,

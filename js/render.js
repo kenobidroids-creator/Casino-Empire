@@ -87,13 +87,7 @@ function render() {
   ctx.textAlign='center';
   ctx.fillText('▲ ENTRANCE ▲',ex+TILE/2,ey+TILE*.55);
 
-  // ── Dropped money ──
-  for(const d of G.droppedMoney) drawDroppedMoney(d);
-
-  // ── Tips ──
-  for(const t of G.tips) drawTip(t);
-
-  // ── Dirty items ──
+  // ── Dirty items (on floor) ──
   for(const d of G.dirtyItems) drawDirtyItem(d);
 
   // ── Machines ──
@@ -102,11 +96,21 @@ function render() {
   // ── Jackpot flashes ──
   for(const j of G.jackpots) drawJackpotFlash(j);
 
-  // ── Patrons ──
+  // ── Dropped money & tips drawn AFTER machines so never behind them ──
+  for(const d of G.droppedMoney) drawDroppedMoney(d);
+  for(const t of G.tips) drawTip(t);
+
+  // ── Patrons (after machines so they appear in front) ──
   for(const p of G.patrons)   drawPatron(p);
 
   // ── Employees ──
   for(const e of G.employees) drawEmployee(e);
+
+  // ── Lost & Found returning visitors ──
+  for(const v of G.lostAndFoundVisitors) drawLFVisitor(v);
+
+  // ── Lost & Found returning visitors ──
+  for(const v of G.lostAndFoundVisitors) drawLFVisitor(v);
 
   // ── Placement preview ──
   drawPlacementPreview();
@@ -258,6 +262,43 @@ function drawPlacementPreview() {
   ctx.fillStyle='#f0d080'; ctx.font='13px serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('🔄',hx,hy);
+}
+
+// ── LF Visitor (returning patron) ─────────
+function drawLFVisitor(v) {
+  const sp = w2s(v.wx, v.wy);
+  const x = sp.x, y = sp.y;
+
+  // Body (slightly different shade to distinguish from regular patrons)
+  ctx.fillStyle = v.color;
+  ctx.fillRect(x-5, y-14, 10, 12);
+  // Head
+  ctx.fillStyle = '#f0c890';
+  ctx.beginPath(); ctx.arc(x, y-18, 6, 0, Math.PI*2); ctx.fill();
+  // Hair
+  ctx.fillStyle = v.hairColor||'#3a2808';
+  ctx.beginPath(); ctx.arc(x, y-20, 6, Math.PI, 0); ctx.fill();
+  // Return badge above head (green star)
+  ctx.fillStyle = '#50e050';
+  ctx.font = 'bold 9px serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('★', x, y-26);
+
+  // Name tag
+  ctx.fillStyle = 'rgba(80,220,80,.8)';
+  ctx.font = 'bold 6px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(v.patronName, x, y+2);
+
+  // If waiting at desk, show pulsing indicator
+  if(v.state === 'WAITING') {
+    const pulse = 0.6 + 0.4*Math.sin(Date.now() * 0.005);
+    ctx.strokeStyle = `rgba(80,220,80,${pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y-14, 10, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = `rgba(80,220,80,${pulse*0.4})`;
+    ctx.beginPath(); ctx.arc(x, y-14, 10, 0, Math.PI*2); ctx.fill();
+  }
 }
 
 // ── Float text helper ──

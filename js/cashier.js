@@ -112,3 +112,8 @@ function closeCashierPanel(){
   document.getElementById('cashier-panel').style.display='none';
   updateCashierAlert();
 }
+
+function openCashierManage() {
+  const cashier=G.machines.find(m=>m.type==='cashier');
+  if(cashier) { closeCashierPanel(); openUpgradePanel(cashier.id); }
+}

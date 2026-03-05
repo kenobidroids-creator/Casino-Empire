@@ -6,8 +6,12 @@ const HAIR_COLORS=['#3a2808','#1a1008','#c8a040','#a06020','#e0c890','#202020','
 
 function spawnPatron() {
   if(G.patrons.length>=22) return;
-  const slots=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot&&m.occupied==null);
-  if(slots.length===0) return;
+  // Spawn if there's any machine patrons can interact with
+  const hasMachines=G.machines.some(m=>{
+    const def=MACHINE_DEFS[m.type];
+    return def.isSlot||def.tableGame||def.isSportsbook||def.isBand||def.isBar;
+  });
+  if(!hasMachines) return;
 
   const wp=tile2world(ENT_TX(),ENT_TY());
   const p={
@@ -20,7 +24,7 @@ function spawnPatron() {
     targetX:wp.x+TILE/2, targetY:wp.y+TILE/2,
     speed:50+Math.random()*40,
     machineId:null, ticketValue:0, ticketPaid:false,
-    budget:20+Math.random()*100,
+    budget:8+Math.random()*22,   // $8–30 keeps sessions realistic vs. lower bets
     playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
     wantsFood:Math.random()<.30,
     foodState:null, eatTimer:0,
@@ -38,6 +42,7 @@ function updatePatron(p,dt) {
     case 'WALKING_TO_CASHIER':
     case 'WALKING_TO_KIOSK':
     case 'WALKING_TO_BAR':
+    case 'WALKING_TO_TABLE':
     case 'LEAVING':
       movePatron(p,dt); break;
     case 'PLAYING':
@@ -45,6 +50,7 @@ function updatePatron(p,dt) {
     case 'WAITING_CASHIER':
     case 'WAITING_AT_BAR':
     case 'WAITING_JACKPOT':
+    case 'IDLE_AT_TABLE':
       break; // idle
     case 'WAITING_KIOSK':
       p._kioskTimer-=dt;
@@ -61,36 +67,97 @@ function updatePatron(p,dt) {
       if(p.eatTimer<=0) finishEating(p);
       break;
     case 'PAID':
-      p.ticketPaid=true; p.ticketValue=0;
-      kickOut(p); break;
+      p.ticketPaid=true;
+      G.money -= p.ticketValue;
+      G.dayStats.moneyOut += p.ticketValue;
+      p.ticketValue=0;
+      afterPayment(p);
+      break;
   }
 }
 
 function updatePlaying(p,dt) {
   p.playTimer+=dt;
-  if(p.spinsLeft>0&&p.playTimer>=p.spinInterval) {
+
+  if(p.spinsLeft>0 && p.playTimer>=p.spinInterval) {
     p.playTimer-=p.spinInterval;
     p.spinsLeft--;
     doSpin(p);
   }
-  if(p.spinsLeft<=0) finishPlaying(p);
+
+  // Don't finish if state was changed to WAITING_JACKPOT inside doSpin
+  if(p.state !== 'PLAYING') return;
+
+  if(p.spinsLeft<=0) {
+    // Wait for the last spin's reels to stop before walking away
+    const m = G.machines.find(m=>m.id===p.machineId);
+    const reelsStillSpin = m && m._reels && m._reels.some(r=>!r.stopped);
+    if(!reelsStillSpin) finishPlaying(p);
+  }
 }
 
 function assignMachine(p) {
   const slots=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot&&m.occupied==null);
-  if(!slots.length){kickOut(p);return;}
+  const tables=G.machines.filter(m=>MACHINE_DEFS[m.type].isTable&&MACHINE_DEFS[m.type].tableGame);
+  const bands=G.machines.filter(m=>MACHINE_DEFS[m.type].isBand);
+  const sports=G.machines.filter(m=>MACHINE_DEFS[m.type].isSportsbook);
+
+  // Weighted choice: 65% slots, 20% tables, 10% band/sports, 5% leave
+  const r=Math.random();
+  let candidates=[];
+  if(r<0.65&&slots.length)       candidates=slots;
+  else if(r<0.85&&tables.length) candidates=tables;
+  else if(r<0.92&&(bands.length||sports.length)) candidates=[...bands,...sports];
+  else if(slots.length)          candidates=slots; // fallback
+
+  if(!candidates.length){kickOut(p);return;}
+
   let best=null,bestDist=Infinity;
-  for(const m of slots) {
+  for(const m of candidates) {
+    if(MACHINE_DEFS[m.type].isSlot&&m.occupied!=null) continue;
     const wp=tile2world(m.tx,m.ty);
     const dx=wp.x+TILE/2-p.wx, dy=wp.y+TILE/2-p.wy;
     const d=Math.sqrt(dx*dx+dy*dy);
     if(d<bestDist){best=m;bestDist=d;}
   }
-  best.occupied=p.id;
-  p.machineId=best.id;
-  p.state='WALKING_TO_MACHINE';
-  const fp=getMachineFrontPos(best);
-  p.targetX=fp.wx; p.targetY=fp.wy;
+  if(!best){kickOut(p);return;}
+
+  const def=MACHINE_DEFS[best.type];
+  if(def.isSlot) {
+    best.occupied=p.id;
+    p.machineId=best.id;
+    p.state='WALKING_TO_MACHINE';
+    const fp=getMachineFrontPos(best);
+    p.targetX=fp.wx; p.targetY=fp.wy;
+  } else if(def.isTable&&def.tableGame) {
+    const ts=TABLE_STATES[best.id];
+    const totalSeats=def.seats||4;
+    const seatsTaken=ts?ts.players.length:0;
+    // Count patrons already walking to or sitting at this table
+    const alreadyHere=G.patrons.filter(p2=>
+      p2.id!==p.id&&(p2.tableId===best.id)&&
+      (p2.state==='WALKING_TO_TABLE'||p2.state==='IDLE_AT_TABLE')
+    ).length;
+    if(alreadyHere>=totalSeats){kickOut(p);return;}
+    const nextSeat=seatsTaken+alreadyHere;
+    routePatronToTableSeat(p, best, nextSeat);
+  } else if(def.isBand||def.isSportsbook) {
+    // Spread watchers out in an arc in front of the machine
+    const fp=getMachineFrontPos(best);
+    const watcherCount=G.patrons.filter(p2=>
+      p2.id!==p.id&&p2.machineId===best.id&&
+      (p2.state==='WALKING_TO_MACHINE'||p2.state==='PLAYING')
+    ).length;
+    // Fan out: each watcher offset by 32px tangentially
+    const angle=(watcherCount%8)*(Math.PI/4);
+    const spread=Math.floor(watcherCount/8+1)*28;
+    p.state='WALKING_TO_MACHINE';
+    p.machineId=best.id;
+    p.targetX=fp.wx + Math.cos(angle)*spread;
+    p.targetY=fp.wy + Math.sin(angle)*spread*0.5 + 8;
+  } else {
+    kickOut(p);
+  }
 }
 
 function getMachineFrontPos(m) {
@@ -129,8 +196,8 @@ function doSpin(p) {
   trackRev(bet);
   m._flash=Date.now(); m._flashTxt='+$'+bet.toFixed(2);
 
-  // Small chance to drop money near machine during play
-  if(Math.random()<0.04) dropMoneyNear(m,p);
+  // Very small chance to drop money near machine during play (1 in 200 spins)
+  if(Math.random()<0.005) dropMoneyNear(m,p);
 
   const luckBonus=(m.upgrades.luck||0)*.02;
   const winRate=def.winRate+luckBonus;
@@ -148,8 +215,8 @@ function doSpin(p) {
     const winSym=REEL_SYMBOLS[Math.floor(Math.random()*REEL_SYMBOLS.length)];
     reelResult=[winSym,winSym,winSym];
     spawnFloat(p.wx,p.wy-20,'WIN $'+payout.toFixed(2),'#f0d060');
-    // Occasionally drop a coin when winning big
-    if(payout>10&&Math.random()<0.08) dropMoneyNear(m,p);
+    // Rare chance to drop a coin on a large win
+    if(payout>8&&Math.random()<0.025) dropMoneyNear(m,p);
 
     if(p.ticketValue>=JACKPOT_THRESH&&!G.jackpots.find(j=>j.patronId===p.id)) {
       triggerJackpot(m,p,p.ticketValue);
@@ -158,14 +225,15 @@ function doSpin(p) {
   startMachineReels(m,reelResult);
 }
 
-// Drop money near a machine position, not from kickOut
+// Drop money in FRONT of machine (at patron's feet), never under it
 function dropMoneyNear(m,p) {
-  const wp=tile2world(m.tx,m.ty);
-  const amt=parseFloat((.10+Math.random()*2.90).toFixed(2));
+  const front = getMachineFrontPos(m);
+  const amt   = parseFloat((.10+Math.random()*1.90).toFixed(2));
+  // Scatter a little around front position
   G.droppedMoney.push({
     id:G.nextDropId++,
-    wx:wp.x+TILE/2+(Math.random()*30-15),
-    wy:wp.y+TILE+(Math.random()*20-10),
+    wx: front.wx + (Math.random()*24-12),
+    wy: front.wy + (Math.random()*16),
     amount:amt,
     patronName:p.name
   });
@@ -218,16 +286,16 @@ function routeToPayment(p) {
 }
 
 function afterPayment(p) {
-  // Small chance to drop coins at cashier window after cashing out
-  if(Math.random()<0.07) {
+  // Rare chance to drop coins near cashier counter (in front, not under)
+  if(Math.random()<0.02) {
     const cashier=G.machines.find(m=>m.type==='cashier');
     if(cashier) {
-      const wp=tile2world(cashier.tx,cashier.ty);
-      const amt=parseFloat((.05+Math.random()*1.45).toFixed(2));
+      const fp=getMachineFrontPos(cashier);
+      const amt=parseFloat((.05+Math.random()*0.95).toFixed(2));
       G.droppedMoney.push({
         id:G.nextDropId++,
-        wx:wp.x+TILE+(Math.random()*20-10),
-        wy:wp.y+TILE+12,
+        wx:fp.wx+(Math.random()*32-16),
+        wy:fp.wy+(Math.random()*10),
         amount:amt, patronName:p.name
       });
     }
@@ -241,9 +309,11 @@ function afterPayment(p) {
 
 function routeToBar(p,bar) {
   p.state='WALKING_TO_BAR'; p.foodState='will_order';
-  const wp=tile2world(bar.tx,bar.ty);
-  p.targetX=wp.x+MACHINE_DEFS.bar.w*TILE/2;
-  p.targetY=wp.y+TILE+8; p._barId=bar.id;
+  // Walk to front face of bar, not overlapping bar tiles
+  const fp=getMachineFrontPos(bar);
+  p.targetX=fp.wx+(Math.random()*20-10);
+  p.targetY=fp.wy+8;
+  p._barId=bar.id;
 }
 
 function finishEating(p) {
@@ -292,8 +362,9 @@ function onPatronArrival(p) {
       p.state='WAITING_AT_BAR';
       createFoodOrder(p);
       break;
-    case 'LEAVING':
-      G.patrons=G.patrons.filter(x=>x.id!==p.id); break;
+    case 'WALKING_TO_TABLE':
+      p.state='IDLE_AT_TABLE';
+      break;
   }
 }
 

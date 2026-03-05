@@ -38,10 +38,12 @@
   </div>
   <div class="ctrl-group">
     <button class="ctrl-btn" id="expand-btn" onclick="expandFloor()" style="display:none">Expand Floor</button>
+    <button class="ctrl-btn" onclick="openManagementWindow()">Management</button>
     <button class="ctrl-btn" onclick="rotatePlacement()" title="Rotate (R key)">Rotate</button>
     <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1x</button>
     <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2x</button>
     <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3x</button>
+    <button class="ctrl-btn" onclick="openManagementWindow()">Management</button>
     <button class="ctrl-btn" onclick="openMinigame()">Play Slots</button>
   </div>
 </div>
@@ -79,6 +81,9 @@
 <div id="cashier-panel" class="panel">
   <button class="panel-close" onclick="closeCashierPanel()">X</button>
   <h2>Cashier Window</h2>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <button class="ctrl-btn" style="font-size:9px;padding:3px 8px" onclick="openCashierManage()">⚙ Manage</button>
+  </div>
   <div class="patron-name" id="cpat-name">Patron</div>
   <div class="ticket-amt" id="ctick">$0.00</div>
   <div class="till-wrap">
@@ -153,6 +158,16 @@
   </div>
 </div>
 
+<!-- MANAGEMENT WINDOW -->
+<div id="mgmt-panel" class="panel">
+  <button class="panel-close" onclick="closeManagementWindow()">X</button>
+  <h2>Casino Management</h2>
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+    <button class="ctrl-btn" onclick="openSurveillancePanel();closeManagementWindow()">Open Surveillance</button>
+  </div>
+  <div id="mgmt-contacts"></div>
+</div>
+
 <!-- SURVEILLANCE PANEL -->
 <div id="surv-panel" class="panel">
   <button class="panel-close" onclick="closeSurveillancePanel()">X</button>
@@ -205,6 +220,34 @@
   </div>
 </div>
 
+<!-- IDLE EARNINGS SUMMARY -->
+<div id="idle-summary" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;align-items:center;justify-content:center;">
+  <div style="background:var(--panel-bg);border:1px solid rgba(201,168,76,.4);border-radius:14px;padding:22px;max-width:380px;width:92%;">
+    <h2 style="font-family:'Playfair Display',serif;color:var(--gold-light);font-size:18px;text-align:center;margin-bottom:10px;">
+      Welcome Back!
+    </h2>
+    <p style="color:var(--text-muted);font-size:11px;text-align:center;margin-bottom:12px;">
+      Your casino ran for <strong id="idle-time">0m</strong> while you were away (50% idle efficiency)
+    </p>
+    <div id="idle-rows"></div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid rgba(201,168,76,.2);margin-top:6px;">
+      <span style="color:var(--gold);font-weight:700;">Gross Earnings</span>
+      <span style="color:var(--gold-light);font-weight:700;" id="idle-gross">$0</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:4px 0;">
+      <span style="color:var(--text-muted);font-size:11px;">Staff Wages</span>
+      <span style="color:#e07070;font-size:13px;" id="idle-wages">$0</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(201,168,76,.1);margin-top:4px;">
+      <span style="color:var(--gold);font-weight:700;font-size:15px;">Net Added to Balance</span>
+      <span style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;" id="idle-net">$0</span>
+    </div>
+    <button onclick="closeIdleSummary()" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#5a3e06,#b89030);color:#000;border:none;border-radius:9px;padding:11px;font-family:'Playfair Display',serif;font-size:17px;cursor:pointer;">
+      Back to the Floor!
+    </button>
+  </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
 <script src="js/render.js"></script>
@@ -215,6 +258,8 @@
 <script src="js/cashier.js"></script>
 <script src="js/food.js"></script>
 <script src="js/minigame.js"></script>
+<script src="js/tables.js"></script>
+<script src="js/idle.js"></script>
 <script src="js/input.js"></script>
 <script src="js/game.js"></script>
 

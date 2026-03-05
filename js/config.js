@@ -2,86 +2,107 @@
 //  config.js
 // ═══════════════════════════════════════════
 
-const TILE     = 64;
-const WALL     = 1;
+const TILE = 64;
+const WALL = 1;
 
-// Floor starts small; player can expand
 const FLOOR_LEVELS = [
-  { w: 14, h: 10, cost: 0,    label: 'Starter'   },
-  { w: 20, h: 14, cost: 3000, label: 'Mid-size'  },
-  { w: 28, h: 20, cost: 8000, label: 'Full Casino'}
+  { w:14, h:10, cost:0,    label:'Starter'    },
+  { w:22, h:14, cost:3000, label:'Mid-size'   },
+  { w:30, h:20, cost:8000, label:'Full Casino' }
 ];
-// Convenience aliases updated at runtime via G.floorW / G.floorH
+
 const ENT_TX = () => Math.floor(G.floorW/2);
 const ENT_TY = () => G.floorH - 1;
 
-const REEL_SYMBOLS   = ['7','BAR','🔔','🍊','🍋','🍒','⭐','💎'];
-const REEL_COLORS    = ['#ff4444','#fff','#f0c040','#f07020','#e8e040','#e04060','#f8e040','#80c8ff'];
-const JACKPOT_THRESH = 200;   // ticket value that triggers jackpot hand-pay
-const JACKPOT_TIMEOUT = 40000; // ms before unclaimed jackpot auto-pays (deducted)
+const REEL_SYMBOLS = ['7','BAR','🔔','🍊','🍋','🍒','⭐','💎'];
+const REEL_COLORS  = ['#ff4444','#fff','#f0c040','#f07020','#e8e040','#e04060','#f8e040','#80c8ff'];
+const JACKPOT_THRESH  = 50;
+const JACKPOT_TIMEOUT = 50000;
 
+// ── Slot house-edge math ─────────────────────────────────────────────────
+// Net per $1 bet = 1 – winRate×avgMult
+// Basic:   1 – 0.22×2.85 = 0.373  → 37% edge  (budget machine)
+// Silver:  1 – 0.25×3.1  = 0.225  → 22% edge
+// Gold:    1 – 0.28×3.0  = 0.160  → 16% edge
+// Diamond: 1 – 0.30×2.9  = 0.130  → 13% edge
+// ─────────────────────────────────────────────────────────────────────────
 const MACHINE_DEFS = {
   slot_basic: {
-    name:'Basic Slot',    icon:'🎰', color:'#9a1818', w:1, h:1,
-    cost:200, betMin:1,  betMax:3,   winRate:.30, winMultMin:2, winMultMax:5,
-    playTime:4500, tier:1, isSlot:true
+    name:'Basic Slot',   icon:'🎰', color:'#9a1818', w:1, h:1,
+    cost:200,  betMin:1,  betMax:4,   winRate:.22, winMultMin:1.5, winMultMax:4.2,
+    playTime:4000, tier:1, isSlot:true, houseEdge:0.373
   },
   slot_silver: {
-    name:'Silver Slot',   icon:'🎲', color:'#4a6070', w:1, h:1,
-    cost:650, betMin:3,  betMax:10,  winRate:.32, winMultMin:2, winMultMax:6,
-    playTime:4000, tier:2, isSlot:true
+    name:'Silver Slot',  icon:'🎲', color:'#4a6070', w:1, h:1,
+    cost:650,  betMin:3,  betMax:12,  winRate:.25, winMultMin:1.8, winMultMax:4.4,
+    playTime:3600, tier:2, isSlot:true, houseEdge:0.225
   },
   slot_gold: {
-    name:'Gold Slot',     icon:'⭐', color:'#b07008', w:1, h:1,
-    cost:2200, betMin:12, betMax:30,  winRate:.34, winMultMin:2, winMultMax:7,
-    playTime:3500, tier:3, isSlot:true
+    name:'Gold Slot',    icon:'⭐', color:'#b07008', w:1, h:1,
+    cost:2200, betMin:8,  betMax:30,  winRate:.28, winMultMin:2.0, winMultMax:4.0,
+    playTime:3200, tier:3, isSlot:true, houseEdge:0.16
   },
   slot_diamond: {
-    name:'Diamond Slot',  icon:'💎', color:'#1058a8', w:1, h:1,
-    cost:8500, betMin:60, betMax:160, winRate:.36, winMultMin:2, winMultMax:8,
-    playTime:3000, tier:4, isSlot:true
+    name:'Diamond Slot', icon:'💎', color:'#1058a8', w:1, h:1,
+    cost:8500, betMin:25, betMax:100, winRate:.30, winMultMin:2.0, winMultMax:3.8,
+    playTime:2800, tier:4, isSlot:true, houseEdge:0.13
   },
-  kiosk: {
-    name:'Ticket Kiosk',  icon:'🏧', color:'#1a7840', w:1, h:1,
-    cost:450, tier:0, isSlot:false, isKiosk:true
+
+  // ── Support ──────────────────────────────
+  kiosk:        { name:'Ticket Kiosk',   icon:'🏧', color:'#1a7840', w:1,h:1, cost:450,  isKiosk:true },
+  cashier:      { name:'Cashier Window', icon:'💰', color:'#502880', w:2,h:1, cost:280,  isCashier:true },
+  bar:          { name:'Bar & Grill',    icon:'🍺', color:'#5c2008', w:2,h:1, cost:600,  isBar:true },
+  table:        { name:'Table',          icon:'🪑', color:'#3a2010', w:1,h:1, cost:120,  isTable:true, seats:1 },
+  surveillance: { name:'Surveillance',  icon:'📷', color:'#182840', w:1,h:1, cost:900,  isSurveillance:true },
+  security:     { name:'Security Desk', icon:'🔒', color:'#203040', w:1,h:1, cost:500,  isSecurity:true },
+
+  // ── Entertainment ────────────────────────
+  band:         { name:'Band Stage',     icon:'🎸', color:'#1a0a40', w:2,h:2, cost:1200, isBand:true,
+                  desc:'Keeps patrons entertained, slowing their departure' },
+
+  // ── Sportsbook ───────────────────────────
+  sportsbook:   { name:'Sportsbook',     icon:'📺', color:'#082820', w:2,h:1, cost:2000, isSportsbook:true,
+                  houseEdge:0.16, desc:'Patrons bet on live sports events' },
+  tv_screen:    { name:'TV Screen',      icon:'📺', color:'#0a1020', w:1,h:1, cost:400,  isTvScreen:true },
+
+  // ── Table Games ─────────────────────────
+  blackjack_table: {
+    name:'Blackjack',   icon:'🃏', color:'#062a14', w:2,h:2, cost:3500,
+    isTable:true, tableGame:'blackjack', seats:5, houseEdge:0.005,
+    desc:'Classic blackjack, house edge ~0.5%'
   },
-  cashier: {
-    name:'Cashier Window', icon:'💰', color:'#502880', w:2, h:1,
-    cost:280, tier:0, isSlot:false, isCashier:true
+  roulette_table: {
+    name:'Roulette',    icon:'🎡', color:'#1a0006', w:2,h:2, cost:4000,
+    isTable:true, tableGame:'roulette', seats:8, houseEdge:0.053,
+    desc:'American roulette, 5.3% house edge'
   },
-  bar: {
-    name:'Bar & Grill',   icon:'🍺', color:'#5c2008', w:2, h:1,
-    cost:600, tier:0, isSlot:false, isBar:true
+  poker_table: {
+    name:'Poker Table', icon:'♠', color:'#0a1a06', w:2,h:2, cost:3000,
+    isTable:true, tableGame:'poker', seats:6, houseEdge:0.12,
+    desc:'Texas Hold\'em style poker vs house'
   },
-  table: {
-    name:'Table',          icon:'🪑', color:'#3a2010', w:1, h:1,
-    cost:120, tier:0, isSlot:false, isTable:true, seats:1
-  },
-  surveillance: {
-    name:'Surveillance Rm', icon:'📷', color:'#182840', w:1, h:1,
-    cost:900, tier:0, isSlot:false, isSurveillance:true
-  }
 };
 
 const UPGRADES = {
-  speed: { name:'Speed Boost', icon:'⚡', maxLv:3, baseCost:150, mult:2.0, desc:'Play 20% faster/level' },
-  luck:  { name:'Lucky Charm', icon:'🍀', maxLv:3, baseCost:220, mult:2.2, desc:'+2% win rate/level'    },
-  bet:   { name:'High Stakes', icon:'💸', maxLv:3, baseCost:300, mult:2.5, desc:'Max bet +25%/level'     }
+  speed: { name:'Speed Boost', icon:'⚡', maxLv:3, baseCost:200,  mult:2.0, desc:'Play 20% faster/level' },
+  luck:  { name:'Lucky Charm', icon:'🍀', maxLv:3, baseCost:300,  mult:2.2, desc:'+2% win rate/level'    },
+  bet:   { name:'High Stakes', icon:'💸', maxLv:3, baseCost:400,  mult:2.5, desc:'Max bet +25%/level'     }
 };
 
 const EMPLOYEE_DEFS = {
-  cashier_staff:    { name:'Cashier',       icon:'👔', color:'#2060c0', cost:400, wage:80  },
-  slot_attendant:   { name:'Slot Attendant',icon:'🎩', color:'#a04020', cost:500, wage:100 },
-  food_server:      { name:'Food Server',   icon:'🧑‍🍳', color:'#208040', cost:450, wage:90  }
+  cashier_staff:  { name:'Cashier',         icon:'👔', color:'#2060c0', cost:400, wage:80  },
+  slot_attendant: { name:'Slot Attendant',  icon:'🎩', color:'#a04020', cost:500, wage:100 },
+  food_server:    { name:'Food Server',     icon:'🧑‍🍳', color:'#208040', cost:450, wage:90  },
+  dealer:         { name:'Table Dealer',    icon:'🃏', color:'#183060', cost:600, wage:120 }
 };
 
 const FOOD_MENU = [
-  { id:'beer',     name:'Beer',       icon:'🍺', price:6,  prepTime:3000 },
-  { id:'cocktail', name:'Cocktail',   icon:'🍹', price:12, prepTime:5000 },
-  { id:'burger',   name:'Burger',     icon:'🍔', price:14, prepTime:7000 },
-  { id:'nachos',   name:'Nachos',     icon:'🌮', price:10, prepTime:6000 },
-  { id:'water',    name:'Water',      icon:'💧', price:3,  prepTime:1500 },
-  { id:'coffee',   name:'Coffee',     icon:'☕', price:5,  prepTime:3500 }
+  { id:'beer',     name:'Beer',      icon:'🍺', price:8,  prepTime:2500 },
+  { id:'cocktail', name:'Cocktail',  icon:'🍹', price:14, prepTime:4500 },
+  { id:'burger',   name:'Burger',    icon:'🍔', price:16, prepTime:7000 },
+  { id:'nachos',   name:'Nachos',    icon:'🌮', price:12, prepTime:5500 },
+  { id:'water',    name:'Water',     icon:'💧', price:4,  prepTime:1500 },
+  { id:'coffee',   name:'Coffee',    icon:'☕', price:6,  prepTime:3000 }
 ];
 
 const TILL_BILLS = [
@@ -93,19 +114,16 @@ const TILL_COINS = [
   {value:0.05,label:'5¢'},{value:0.01,label:'1¢'}
 ];
 
-const PATRON_COLORS = ['#e04040','#4080d0','#30b060','#d08010','#9040c0','#20b0a0','#d06020','#808090'];
-const PATRON_NAMES  = ['Alice','Bob','Carol','Dave','Eve','Frank','Grace','Hank','Iris','Jack',
-                        'Kim','Lee','Mia','Ned','Ora','Pete','Quinn','Rose','Sam','Tina'];
+const PATRON_COLORS=['#e04040','#4080d0','#30b060','#d08010','#9040c0','#20b0a0','#d06020','#808090'];
+const PATRON_NAMES=['Alice','Bob','Carol','Dave','Eve','Frank','Grace','Hank','Iris','Jack',
+                     'Kim','Lee','Mia','Ned','Ora','Pete','Quinn','Rose','Sam','Tina',
+                     'Uma','Vic','Wendy','Xav','Yara','Zoe'];
 
-// Rotation helpers
-// rot 0=south, 1=west, 2=north, 3=east (front face)
 function getPatronOffset(rot) {
-  // Returns tile offset from machine top-left for patron standing position
-  // Patron stands 1 tile beyond the front face
   switch(rot) {
-    case 0: return { dx:0,   dy:1   }; // front = south
-    case 1: return { dx:-1,  dy:0   }; // front = west
-    case 2: return { dx:0,   dy:-1  }; // front = north
-    case 3: return { dx:1,   dy:0   }; // front = east
+    case 0: return {dx:0,  dy:1 };
+    case 1: return {dx:-1, dy:0 };
+    case 2: return {dx:0,  dy:-1};
+    case 3: return {dx:1,  dy:0 };
   }
 }
