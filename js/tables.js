@@ -65,7 +65,8 @@ function routePatronToTableSeat(p, m, seatIdx) {
 
 // ── Update table game ─────────────────────────────────────────────────────
 function updateTableGame(m, dt) {
-  const ts=TABLE_STATES[m.id];
+  let ts=TABLE_STATES[m.id];
+  if(!ts) { initTableState(m); ts=TABLE_STATES[m.id]; }
   if(!ts) return;
 
   // Pull in idle patrons waiting at this table into seats
@@ -204,11 +205,14 @@ function updateBand(m, dt) {
 
 // ── Sportsbook ────────────────────────────────────────────────────────────
 function updateSportsbook(m, dt) {
+  // Count nearby patrons for sprite display
+  const wp=tile2world(m.tx,m.ty);
+  m._nearPatrons=G.patrons.filter(p=>Math.hypot(p.wx-wp.x,p.wy-wp.y)<TILE*5).length;
+
   if(!m._sportTimer) m._sportTimer=15000+Math.random()*10000;
   m._sportTimer-=dt;
   if(m._sportTimer>0) return;
   m._sportTimer=20000+Math.random()*15000;
-  const wp=tile2world(m.tx,m.ty);
   const betAmount=parseFloat((3+Math.random()*12).toFixed(2));
   const near=G.patrons.filter(p=>
     Math.hypot(p.wx-wp.x,p.wy-wp.y)<TILE*5 && p.budget>=betAmount &&

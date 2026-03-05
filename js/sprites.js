@@ -451,12 +451,19 @@ function drawPatron(p) {
           :p.state==='WAITING_AT_BAR'||p.state==='WALKING_TO_BAR'?'🍺'
           :p.state==='EATING'?'🍽'
           :p.state==='LEAVING'?'🚶'
-          :p.state==='WAITING_JACKPOT'?'🏆':null;
+          :p.state==='WAITING_JACKPOT'?'🏆'
+          :p.state==='WAITING_MACHINE'?'⏳'
+          :p.state==='IDLE_AT_TABLE'?'🃏':null;
 
   if(em) {
     ctx.font='9px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
     ctx.fillText(em,x,y-11);
   }
+
+  // Mood dot (tiny coloured pixel top-right of head)
+  const mood=p._mood!=null?p._mood:100;
+  ctx.fillStyle=mood>66?'#50e050':mood>33?'#e0c040':'#e04040';
+  ctx.fillRect(x+5,y-12,3,3);
 
   // Ticket value
   if(p.ticketValue>0&&p.state!=='PLAYING') {
@@ -587,34 +594,8 @@ function drawBandSprite(m,def,x,y,w,h) {
 }
 
 // ── Sportsbook ─────────────────────────────
-function drawSportsbookSprite(m,def,x,y,w,h) {
-  const g=ctx.createLinearGradient(x,y,x+w,y+h);
-  g.addColorStop(0,'#062810'); g.addColorStop(1,'#030e06');
-  ctx.fillStyle=g; prect(x+1,y+1,w-2,h-2,4); ctx.fill();
-  ctx.strokeStyle='rgba(60,200,80,.25)'; ctx.lineWidth=1;
-  prect(x+1,y+1,w-2,h-2,4); ctx.stroke();
+// drawSportsbookSprite defined in sports.js
 
-  // Big screen
-  const sx2=x+4, sy2=y+4, sw=w-8, sh=h*.58;
-  ctx.fillStyle='#040e08'; ctx.fillRect(sx2,sy2,sw,sh);
-  ctx.strokeStyle='rgba(60,200,80,.3)'; ctx.lineWidth=.5; ctx.strokeRect(sx2,sy2,sw,sh);
-  ctx.fillStyle='rgba(60,200,80,.04)';
-  for(let ln=0;ln<sh;ln+=2) ctx.fillRect(sx2,sy2+ln,sw,1);
-  // Score display
-  ctx.fillStyle='rgba(60,200,80,.8)'; ctx.font=`bold ${Math.floor(sw*.09)}px monospace`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  const ev=m._lastEvent||'Sports Betting';
-  ctx.fillText(ev.substring(0,16),sx2+sw/2,sy2+sh*.35);
-  ctx.font=`${Math.floor(sw*.07)}px monospace`;
-  ctx.fillStyle='rgba(60,200,80,.45)';
-  ctx.fillText('LIVE ODDS  2.1  1.8',sx2+sw/2,sy2+sh*.65);
-
-  // Counter
-  ctx.fillStyle='#102818'; ctx.fillRect(x+2,y+h*.65,w-4,h*.32);
-  ctx.fillStyle='rgba(60,200,80,.5)'; ctx.font='bold 5px monospace';
-  ctx.textAlign='center'; ctx.textBaseline='bottom';
-  ctx.fillText('SPORTSBOOK',x+w/2,y+h-2);
-}
 
 // ── TV Screen ──────────────────────────────
 function drawTvScreenSprite(m,def,x,y,w,h) {

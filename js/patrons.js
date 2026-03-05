@@ -24,12 +24,20 @@ function spawnPatron() {
     targetX:wp.x+TILE/2, targetY:wp.y+TILE/2,
     speed:50+Math.random()*40,
     machineId:null, ticketValue:0, ticketPaid:false,
-    budget:8+Math.random()*22,   // $8–30 keeps sessions realistic vs. lower bets
+    budget:8+Math.random()*22,
     playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
     wantsFood:Math.random()<.30,
     foodState:null, eatTimer:0,
     _kioskTimer:0, _barId:null,
-    visited:true
+    visited:true,
+    // Tracking for AI thoughts
+    _spentTotal:0, _wonTotal:0,
+    _machineVisits:{},   // {type: count}
+    _favMachine:null,
+    _mood:100,           // 0–100, affects thought
+    _waitTimer:0,        // used when waiting for a machine
+    _waitMax:0,          // patience before giving up
+    _thought:null        // last computed thought string
   };
   G.dayStats.patronsVisited++;
   G.patrons.push(p);
@@ -52,6 +60,21 @@ function updatePatron(p,dt) {
     case 'WAITING_JACKPOT':
     case 'IDLE_AT_TABLE':
       break; // idle
+    case 'WAITING_MACHINE':
+      // Idle near entrance waiting for a slot to free up
+      p._waitTimer -= dt;
+      p._mood = Math.max(0, p._mood - dt*0.003); // slowly get grumpy
+      if(p._waitTimer <= 0) {
+        p._mood = Math.max(0, p._mood-20);
+        p._thought = pickThought(p,'frustrated');
+        kickOut(p);
+      } else {
+        // Re-check every 2 seconds
+        if(!p._retryAcc) p._retryAcc=0;
+        p._retryAcc+=dt;
+        if(p._retryAcc>=2000) { p._retryAcc=0; assignMachine(p); }
+      }
+      break;
     case 'WAITING_KIOSK':
       p._kioskTimer-=dt;
       if(p._kioskTimer<=0) {
@@ -97,20 +120,42 @@ function updatePlaying(p,dt) {
 }
 
 function assignMachine(p) {
-  const slots=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot&&m.occupied==null);
+  const slots=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot);
+  const freeSlots=slots.filter(m=>m.occupied==null);
   const tables=G.machines.filter(m=>MACHINE_DEFS[m.type].isTable&&MACHINE_DEFS[m.type].tableGame);
   const bands=G.machines.filter(m=>MACHINE_DEFS[m.type].isBand);
   const sports=G.machines.filter(m=>MACHINE_DEFS[m.type].isSportsbook);
 
-  // Weighted choice: 65% slots, 20% tables, 10% band/sports, 5% leave
   const r=Math.random();
   let candidates=[];
-  if(r<0.65&&slots.length)       candidates=slots;
-  else if(r<0.85&&tables.length) candidates=tables;
+  if(r<0.65&&slots.length)          candidates=freeSlots;   // prefer free slots
+  else if(r<0.85&&tables.length)    candidates=tables;
   else if(r<0.92&&(bands.length||sports.length)) candidates=[...bands,...sports];
-  else if(slots.length)          candidates=slots; // fallback
+  else if(freeSlots.length)         candidates=freeSlots;   // fallback
 
-  if(!candidates.length){kickOut(p);return;}
+  // All slots occupied — wait with patience instead of leaving immediately
+  if(!candidates.length) {
+    if(slots.length>0 && !tables.length && !bands.length && !sports.length) {
+      // Only slots exist but all full — wait near entrance
+      p.state='WAITING_MACHINE';
+      p._waitMax = 12000 + Math.random()*8000;
+      p._waitTimer = p._waitMax;
+      p._mood = Math.max(50, p._mood-10);
+      p._thought = pickThought(p,'full');
+      return;
+    }
+    kickOut(p); return;
+  }
+
+  // If we wanted a slot but only occupied ones exist, wait instead
+  if(r<0.65 && freeSlots.length===0 && slots.length>0) {
+    p.state='WAITING_MACHINE';
+    p._waitMax = 10000 + Math.random()*8000;
+    p._waitTimer = p._waitMax;
+    p._mood = Math.max(50, p._mood-8);
+    p._thought = pickThought(p,'full');
+    return;
+  }
 
   let best=null,bestDist=Infinity;
   for(const m of candidates) {
@@ -120,7 +165,14 @@ function assignMachine(p) {
     const d=Math.sqrt(dx*dx+dy*dy);
     if(d<bestDist){best=m;bestDist=d;}
   }
-  if(!best){kickOut(p);return;}
+  if(!best){
+    // No valid target found — wait if slots exist
+    if(slots.length>0) {
+      p.state='WAITING_MACHINE'; p._waitTimer=8000; p._waitMax=8000;
+      p._thought=pickThought(p,'full');
+    } else { kickOut(p); }
+    return;
+  }
 
   const def=MACHINE_DEFS[best.type];
   if(def.isSlot) {
@@ -129,36 +181,45 @@ function assignMachine(p) {
     p.state='WALKING_TO_MACHINE';
     const fp=getMachineFrontPos(best);
     p.targetX=fp.wx; p.targetY=fp.wy;
+    // Track favourite machine type
+    p._machineVisits[best.type]=(p._machineVisits[best.type]||0)+1;
+    const fav=Object.entries(p._machineVisits).sort((a,b)=>b[1]-a[1])[0];
+    if(fav) p._favMachine=fav[0];
   } else if(def.isTable&&def.tableGame) {
     const ts=TABLE_STATES[best.id];
     const totalSeats=def.seats||4;
     const seatsTaken=ts?ts.players.length:0;
-    // Count patrons already walking to or sitting at this table
     const alreadyHere=G.patrons.filter(p2=>
       p2.id!==p.id&&(p2.tableId===best.id)&&
       (p2.state==='WALKING_TO_TABLE'||p2.state==='IDLE_AT_TABLE')
     ).length;
-    if(alreadyHere>=totalSeats){kickOut(p);return;}
+    if(alreadyHere>=totalSeats){
+      p.state='WAITING_MACHINE'; p._waitTimer=6000; p._waitMax=6000;
+      p._thought=pickThought(p,'full');
+      return;
+    }
     const nextSeat=seatsTaken+alreadyHere;
     routePatronToTableSeat(p, best, nextSeat);
+    p._machineVisits[best.type]=(p._machineVisits[best.type]||0)+1;
   } else if(def.isBand||def.isSportsbook) {
-    // Spread watchers out in an arc in front of the machine
     const fp=getMachineFrontPos(best);
     const watcherCount=G.patrons.filter(p2=>
       p2.id!==p.id&&p2.machineId===best.id&&
       (p2.state==='WALKING_TO_MACHINE'||p2.state==='PLAYING')
     ).length;
-    // Fan out: each watcher offset by 32px tangentially
     const angle=(watcherCount%8)*(Math.PI/4);
     const spread=Math.floor(watcherCount/8+1)*28;
     p.state='WALKING_TO_MACHINE';
     p.machineId=best.id;
     p.targetX=fp.wx + Math.cos(angle)*spread;
     p.targetY=fp.wy + Math.sin(angle)*spread*0.5 + 8;
+    p._machineVisits[best.type]=(p._machineVisits[best.type]||0)+1;
   } else {
     kickOut(p);
   }
 }
+
+
 
 function getMachineFrontPos(m) {
   const def=MACHINE_DEFS[m.type];
@@ -189,6 +250,7 @@ function doSpin(p) {
   const bet=parseFloat(((def.betMin+Math.random()*(def.betMax-def.betMin))*betMult).toFixed(2));
   if(p.budget<bet){p.spinsLeft=0;return;}
   p.budget-=bet;
+  p._spentTotal=(p._spentTotal||0)+bet;
 
   G.money+=bet; G.totalEarned+=bet;
   m.totalEarned=(m.totalEarned||0)+bet;
@@ -211,7 +273,10 @@ function doSpin(p) {
     const mult=def.winMultMin+Math.random()*(def.winMultMax-def.winMultMin);
     const payout=parseFloat((bet*mult).toFixed(2));
     p.ticketValue=parseFloat((p.ticketValue+payout).toFixed(2));
+    p._wonTotal=(p._wonTotal||0)+payout;
     p._won=true;
+    p._mood=Math.min(100,p._mood+12);
+    p._thought=pickThought(p,'win');
     const winSym=REEL_SYMBOLS[Math.floor(Math.random()*REEL_SYMBOLS.length)];
     reelResult=[winSym,winSym,winSym];
     spawnFloat(p.wx,p.wy-20,'WIN $'+payout.toFixed(2),'#f0d060');
@@ -326,6 +391,69 @@ function finishEating(p) {
     G.dirtyItems.push({id:G.nextDirtyId++,wx:wp.x+TILE/2,wy:wp.y+TILE*.4,machineId:bar.id});
   }
   kickOut(p);
+}
+
+// ── Patron AI thoughts ──────────────────────
+const THOUGHTS={
+  win:   ['Yesss! 🎉','I knew it!','Cha-ching! 💰','Lucky me!','Another round!','I\'m on fire! 🔥','This is my night!'],
+  lose:  ['Ugh...','Just one more spin...','C\'mon...','I was so close!','That\'s ok...','Next one\'s mine.'],
+  full:  ['All machines taken...','I\'ll wait a bit.','Hope one opens up!','Patience, patience.'],
+  frustrated:['This is taking forever!','I\'m out of here! 😤','Worst casino ever.','No machines? Seriously?'],
+  hungry:['I could eat something...','Is there food here? 🍔','Smells good in here!'],
+  rich:  ['I\'m up big! 💎','Don\'t tell my wife...','Feeling lucky tonight!','I love this place!'],
+  poor:  ['Almost out of money...','Maybe just one more?','Shoulda stopped earlier...'],
+  jackpot:['JACKPOT!!! 🏆🎉','Oh my god!!!','I can\'t believe it!','Call the manager!!!'],
+  enter: ['Let\'s win some money!','Feeling lucky today!','Ready to play!','Where do I start?'],
+  eat:   ['That hit the spot 😋','Great service!','I\'ll be back for more.'],
+  leave: ['Good run tonight!','See you next time!','I\'ll be back!','Time to head home.'],
+  table: ['Deal me in!','I\'ve got a system...','Let\'s go poker! ♠','Blackjack baby!'],
+  sports:['GO GO GO! 🏈','My team! My team!','I\'ll take that bet!','Easy money!'],
+};
+
+function pickThought(p, ctx) {
+  let pool=THOUGHTS[ctx]||THOUGHTS.enter;
+  // Contextual upgrades
+  if(ctx==='lose'&&(p._mood||100)<30) pool=THOUGHTS.frustrated;
+  if(ctx==='win'&&(p._wonTotal||0)>(p._spentTotal||1)*1.5) pool=THOUGHTS.rich;
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function computePatronThought(p) {
+  // Build a rich thought object for the click panel
+  const spent=p._spentTotal||0, won=p._wonTotal||0;
+  const mood=p._mood!=null?p._mood:100;
+  const moodEmoji=mood>75?'😊':mood>50?'😐':mood>25?'😟':'😤';
+  const moodLabel=mood>75?'Happy':mood>50?'Neutral':mood>25?'Frustrated':'Angry';
+
+  // Current thought
+  let currentThought=p._thought;
+  if(!currentThought) {
+    if(p.state==='ENTERING') currentThought=pickThought(p,'enter');
+    else if(p.state==='PLAYING') currentThought=p._won?pickThought(p,'win'):pickThought(p,'lose');
+    else if(p.state==='WAITING_MACHINE') currentThought=pickThought(p,'full');
+    else if(p.state==='LEAVING') currentThought=pickThought(p,'leave');
+    else if(p.state==='WAITING_AT_BAR'||p.state==='EATING') currentThought=pickThought(p,'eat');
+    else if(p.state==='IDLE_AT_TABLE') currentThought=pickThought(p,'table');
+    else currentThought=pickThought(p,'enter');
+    p._thought=currentThought;
+  }
+
+  // Favourite machine
+  const favMach=p._favMachine?MACHINE_DEFS[p._favMachine]?.name||p._favMachine:'None yet';
+  const netResult=won-spent;
+
+  return {
+    name:p.name, moodEmoji, moodLabel, mood,
+    thought:currentThought,
+    spent:spent.toFixed(2),
+    won:won.toFixed(2),
+    net:(netResult>=0?'+':'')+netResult.toFixed(2),
+    netColor:netResult>=0?'#7aba70':'#e07070',
+    budget:p.budget.toFixed(2),
+    favMach,
+    state:p.state,
+    visits:Object.entries(p._machineVisits||{}).map(([t,n])=>`${MACHINE_DEFS[t]?.name||t}: ${n}x`).join(', ')||'—',
+  };
 }
 
 function kickOut(p) {

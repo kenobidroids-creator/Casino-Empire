@@ -334,11 +334,12 @@ function handleCanvasClick(sx,sy){
     return;
   }
 
-  // Click patron for delivery
+  // Click patron for delivery OR thought panel
   for(const p of G.patrons){
     const sp=w2s(p.wx,p.wy);
     if(Math.hypot(sp.x-sx,sp.y-sy)<16){
       if(playerCarrying) handlePatronDelivery(p.id);
+      else openPatronThoughts(p.id);
       return;
     }
   }

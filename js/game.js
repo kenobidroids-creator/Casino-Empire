@@ -178,13 +178,15 @@ function buildCameraFeed(container, m, type){
 
   const isSlot        = type==='slot';
   const hasFirstPerson= (type==='cashier'||type==='bar');
-  const isTableGame   = type==='table'||type==='sportsbook';
+  const isTableGame   = type==='table';
+  const isSportsbook  = type==='sportsbook';
 
   // Build tab list
   const tabs=[ {id:'topdown', label:'Top Down'} ];
   if(isSlot)         tabs.push({id:'reels',       label:'Reels'});
   if(hasFirstPerson) tabs.push({id:'firstperson',  label:'Counter View'});
   if(isTableGame)    tabs.push({id:'tableview',    label:'Table View'});
+  if(isSportsbook)   tabs.push({id:'sportview',    label:'Live Sport'});
 
   const tabHtml = tabs.map(t=>
     `<button class="surv-tab ${G.survTabs[m.id]===t.id?'active':''}"
@@ -240,6 +242,8 @@ function drawSurvCanvas(m, type){
     drawFirstPersonView(mc, m, type, W, H);
   } else if(tab==='tableview') {
     drawTableSurvView(mc, m, W, H);
+  } else if(tab==='sportview') {
+    drawSportsbookSurvView(mc, m, W, H);
   } else {
     drawTopDownView(mc, m, W, H);
   }
@@ -977,6 +981,52 @@ function tickCashierFP() {
   const panel=document.getElementById('cashier-panel');
   if(panel.style.display==='block') updateCashierFPView();
 }
+
+// ── Patron Thoughts Panel ──────────────────
+let _patronPanelPid=null;
+function openPatronThoughts(pid){
+  const p=G.patrons.find(p=>p.id===pid);
+  if(!p) return;
+  _patronPanelPid=pid;
+  renderPatronPanel(p);
+  const panel=document.getElementById('patron-panel');
+  panel.style.display='block';
+  attachDrag(panel);
+}
+function closePatronPanel(){
+  document.getElementById('patron-panel').style.display='none';
+  _patronPanelPid=null;
+}
+function renderPatronPanel(p){
+  const t=computePatronThought(p);
+  document.getElementById('patron-panel-name').textContent=t.moodEmoji+' '+t.name;
+  document.getElementById('patron-panel-body').innerHTML=`
+    <div style="background:rgba(0,0,0,.35);border-radius:8px;padding:10px;margin-bottom:8px;font-family:monospace;font-size:11px;color:#d0e8d0;line-height:1.6">
+      <div style="font-size:13px;color:#fff;margin-bottom:6px;font-style:italic">"${t.thought}"</div>
+      <div style="margin-top:4px">Mood: <span style="color:${t.mood>66?'#50e050':t.mood>33?'#e0c040':'#e04040'}">${t.moodLabel}</span>
+        <span style="display:inline-block;width:${Math.round(t.mood*0.7)}px;height:5px;background:${t.mood>66?'#50e050':t.mood>33?'#e0c040':'#e04040'};border-radius:3px;margin-left:6px;vertical-align:middle"></span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">
+      <div class="mstat-box"><div class="mstat-lbl">Spent</div><div class="mstat-val">$${t.spent}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Won</div><div class="mstat-val">$${t.won}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Net</div><div class="mstat-val" style="color:${t.netColor}">${t.net}</div></div>
+      <div class="mstat-box"><div class="mstat-lbl">Budget Left</div><div class="mstat-val">$${t.budget}</div></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);line-height:1.8">
+      <div>State: <span style="color:#c9a84c">${t.state.replace(/_/g,' ')}</span></div>
+      <div>Favourite: <span style="color:#c9a84c">${t.favMach}</span></div>
+      <div>Visits: <span style="color:#c9a84c">${t.visits}</span></div>
+    </div>`;
+}
+function tickPatronPanel(){
+  if(!_patronPanelPid) return;
+  const p=G.patrons.find(p=>p.id===_patronPanelPid);
+  if(!p){ closePatronPanel(); return; }
+  if(!tickPatronPanel._c) tickPatronPanel._c=0;
+  if(++tickPatronPanel._c%30===0) renderPatronPanel(p);
+}
+
 function saveGame(){
   try {
     localStorage.setItem('casinoEmpireV5',JSON.stringify({
@@ -1010,6 +1060,10 @@ function loadGame(){
       ...m,occupied:null,rotation:m.rotation||0,
       upgrades:m.upgrades||{speed:0,luck:0,bet:0},totalEarned:m.totalEarned||0
     }));
+    // TABLE_STATES is in-memory only — re-initialise for every table game machine
+    for(const m of G.machines) {
+      if(MACHINE_DEFS[m.type]?.tableGame) initTableState(m);
+    }
     return true;
   } catch(e){return false;}
 }
@@ -1058,6 +1112,7 @@ function loop(ts){
 
   updateHUD();
   tickCashierFP();
+  tickPatronPanel();
   render();
   requestAnimationFrame(loop);
 }
