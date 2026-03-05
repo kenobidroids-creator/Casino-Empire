@@ -4,6 +4,7 @@
 
 const G = {
   money:5000, totalEarned:0, day:1, speed:1,
+  dayOfWeek:4,  // 0=Mon … 6=Sun, start on Friday
   floorLevel:0,   // index into FLOOR_LEVELS
   floorW:FLOOR_LEVELS[0].w,
   floorH:FLOOR_LEVELS[0].h,

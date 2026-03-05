@@ -99,7 +99,7 @@ canvas.addEventListener('mousedown',e=>{
   }
   isPan=true;
   panStart=mousePos; panCam={x:G.camera.x,y:G.camera.y};
-  canvas.style.cursor='grabbing';
+  if(!G.placementSelected&&!G.moveMode) canvas.style.cursor='grabbing';
 });
 
 canvas.addEventListener('mousemove',e=>{
@@ -304,6 +304,25 @@ document.addEventListener('keydown',e=>{
 function handleCanvasClick(sx,sy){
   const wp=s2w(sx,sy);
   const t=world2tile(wp.x,wp.y);
+
+  // ── Placement mode: click places; click on just-placed machine rotates it ──
+  if(G.placementSelected) {
+    if(inRotateHandle(sx,sy)) { rotatePlacement(); return; }
+    const existing = findMachineAtTile(t.tx,t.ty);
+    if(existing && existing.type === G.placementSelected) {
+      // Tap on an already-placed machine of the same type → rotate it in place
+      existing.rotation = ((existing.rotation||0)+1)%4;
+      toast('Rotated '+MACHINE_DEFS[existing.type].name+' ['+['↓S','←W','↑N','→E'][existing.rotation]+']','');
+      return;
+    }
+    // Place on empty valid tile
+    if(validTile(t.tx,t.ty) && !existing) {
+      placeMachine(G.placementSelected, t.tx, t.ty, G.placementRotation);
+      // Keep selection active so player can place more
+      return;
+    }
+    return;
+  }
 
   // Dirty item?
   for(const d of G.dirtyItems){

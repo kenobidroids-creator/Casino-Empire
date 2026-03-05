@@ -100,12 +100,23 @@ function showIdleSummary(elapsed, summary, gross, wages, net) {
   document.getElementById('idle-net').style.color   = net>=0?'#7aba70':'#e07070';
   document.getElementById('idle-rows').innerHTML    = rows;
 
+  // Pause game while summary is shown
+  if(typeof G!=='undefined') {
+    G._prePauseSpeed = G._prePauseSpeed || G.speed || 1;
+    G.speed = 0;
+    // Reset day accumulator so we don't immediately trigger a new day-end
+    G.dayAcc = 0;
+  }
+
   box.style.display='flex';
 }
 
 function closeIdleSummary() {
   document.getElementById('idle-summary').style.display='none';
   saveTimestamp();
+  // Only restore speed if day-end modal is not also open
+  const dayEndOpen = document.getElementById('day-end-modal').style.display==='flex';
+  if(!dayEndOpen) setSpd(G._prePauseSpeed||1);
 }
 
 // Page Visibility – pause heavy work when tab hidden, save timestamp

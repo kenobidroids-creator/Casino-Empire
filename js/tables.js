@@ -77,6 +77,11 @@ function updateTableGame(m, dt) {
       const bet=parseFloat((3+Math.random()*12).toFixed(2));
       if(p.budget < bet) { kickOut(p); continue; }
       const seatIdx=ts.players.length;
+      // Snap patron to seat position FIRST so float appears in right place
+      const seats=getTableSeatPositions(m, ts.seats);
+      const seat=seats[seatIdx % seats.length];
+      p.wx=seat.wx; p.wy=seat.wy;
+      p.tableSeat=seatIdx;
       ts.players.push({patronId:p.id, bet, cards:[], state:'seated', result:null});
       p.budget-=bet;
       G.money+=bet; G.totalEarned+=bet;
@@ -84,11 +89,6 @@ function updateTableGame(m, dt) {
       m.totalEarned=(m.totalEarned||0)+bet;
       trackRev(bet);
       spawnFloat(p.wx,p.wy-18,'BET $'+bet.toFixed(2),'#d0c060');
-      // Snap patron to their assigned seat position
-      const seats=getTableSeatPositions(m, ts.seats);
-      const seat=seats[seatIdx % seats.length];
-      p.wx=seat.wx; p.wy=seat.wy;
-      p.tableSeat=seatIdx;
     }
   }
 
@@ -224,6 +224,7 @@ function updateSportsbook(m, dt) {
     G.dayStats.moneyIn+=betAmount;
     m.totalEarned=(m.totalEarned||0)+betAmount;
     trackRev(betAmount);
+    spawnFloat(p.wx,p.wy-18,'BET $'+betAmount.toFixed(2),'#60d0ff');
     if(Math.random()<0.42) {
       const payout=betAmount*2;
       G.money-=payout; G.dayStats.moneyOut+=payout;

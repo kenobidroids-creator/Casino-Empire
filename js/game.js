@@ -24,6 +24,31 @@ function updateHUD(){
   document.getElementById('h-pat').textContent  =G.patrons.length;
   document.getElementById('h-day').textContent  =G.day;
   document.getElementById('h-emp').textContent  =G.employees.length;
+
+  // Day progress bar + time-of-day
+  const pct = Math.min(1, (G.dayAcc||0) / G.dayLen);
+  document.getElementById('h-daybar-fill').style.width = (pct*100).toFixed(1)+'%';
+  // Map 0–1 to casino hours: 6 PM → 6 AM (12 hours)
+  const totalMins = pct * 720;
+  const rawHour = 18 + Math.floor(totalMins / 60);
+  const hour = rawHour % 24;
+  const min  = Math.floor(totalMins % 60);
+  const ampm = hour < 12 ? 'AM' : 'PM';
+  const h12  = hour % 12 || 12;
+  document.getElementById('h-daytime').textContent =
+    h12 + ':' + String(min).padStart(2,'0') + ' ' + ampm;
+
+  // Day-of-week label + busy indicator
+  const DOW_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const DOW_BUSY  = [false,false,false,false,true,true,true]; // Fri–Sun highlighted
+  const dow = (G.dayOfWeek||4) % 7;
+  const dowEl = document.getElementById('h-dow');
+  if(dowEl) {
+    dowEl.textContent = DOW_NAMES[dow];
+    dowEl.style.color = DOW_BUSY[dow] ? '#ffcc44' : 'var(--text-muted)';
+    dowEl.title = DOW_BUSY[dow] ? 'Busy night!' : 'Quiet night';
+  }
+
   updateHotbarAfford();
   updateFoundMoneyBadge();
 
@@ -64,11 +89,13 @@ function updateHUD(){
 // ── Day End ────────────────────────────────
 function endDay(){
   G.day++;
+  G.dayOfWeek = ((G.dayOfWeek||4) + 1) % 7;
   const wages=G.employees.reduce((s,e)=>s+EMPLOYEE_DEFS[e.type].wage,0);
   G.money-=wages;
   G.dayStats.wages+=wages;
-  G._prePauseSpeed=G.speed;  // remember speed before pause
-  G.speed=0;                  // PAUSE game while summary is open
+  G._prePauseSpeed = G._prePauseSpeed || G.speed || 1;
+  G.speed=0;
+  G.dayAcc=0;  // reset so next day starts fresh
   openDayEndModal(wages);
   const prev={...G.dayStats};
   G.dayStats={patronsVisited:0,moneyIn:0,moneyOut:0,wages:0,tips:0,foundMoney:0,jackpotsPaid:0};
@@ -78,6 +105,12 @@ function endDay(){
 function openDayEndModal(wages){
   const ds=G.dayStats;
   const net=ds.moneyIn-ds.moneyOut-wages-ds.jackpotsPaid;
+  const DOW_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const DOW_BUSY  = [false,false,false,false,true,true,true];
+  const nextDow   = G.dayOfWeek % 7;  // already incremented in endDay
+  const busyLabel = DOW_BUSY[nextDow] ? '🔥 Busy night' : '🌙 Quiet night';
+  const busyColor = DOW_BUSY[nextDow] ? '#ffcc44' : 'var(--text-muted)';
+
   document.getElementById('ded-day').textContent     ='Day '+(G.day-1)+' Summary';
   document.getElementById('ded-next-day').textContent =G.day;
   document.getElementById('ded-patrons').textContent  =ds.patronsVisited;
@@ -88,6 +121,16 @@ function openDayEndModal(wages){
   document.getElementById('ded-tips').textContent     ='$'+ds.tips.toFixed(2);
   document.getElementById('ded-net').textContent      =(net>=0?'+':'')+net.toFixed(2);
   document.getElementById('ded-net').style.color      =net>=0?'#7aba70':'#e07070';
+
+  // Next-night forecast
+  let forecastEl = document.getElementById('ded-forecast');
+  if(!forecastEl) {
+    forecastEl = document.createElement('div');
+    forecastEl.id = 'ded-forecast';
+    forecastEl.style.cssText='text-align:center;margin:8px 0 0;font-size:11px;font-family:monospace;';
+    document.getElementById('ded-net').parentElement.after(forecastEl);
+  }
+  forecastEl.innerHTML = `Tomorrow: <span style="color:${busyColor}">${DOW_NAMES[nextDow]} — ${busyLabel}</span>`;
 
   const fmSect=document.getElementById('ded-found-sect');
   fmSect.style.display=G.collectedMoneyPool>0.009?'block':'none';
@@ -988,7 +1031,10 @@ function openPatronThoughts(pid){
   const p=G.patrons.find(p=>p.id===pid);
   if(!p) return;
   _patronPanelPid=pid;
-  renderPatronPanel(p);
+  tickPatronPanel._c=0;
+  tickPatronPanel._lastState='';  // force fresh thought on open
+  document.getElementById('patron-panel-body').innerHTML=''; // clear stale DOM
+  renderPatronPanel(p, true);
   const panel=document.getElementById('patron-panel');
   panel.style.display='block';
   attachDrag(panel);
@@ -997,47 +1043,102 @@ function closePatronPanel(){
   document.getElementById('patron-panel').style.display='none';
   _patronPanelPid=null;
 }
-function renderPatronPanel(p){
-  const t=computePatronThought(p);
+function renderPatronPanel(p, forceThought=false){
+  const t=computePatronThought(p, forceThought);
   document.getElementById('patron-panel-name').textContent=t.moodEmoji+' '+t.name;
-  document.getElementById('patron-panel-body').innerHTML=`
-    <div style="background:rgba(0,0,0,.35);border-radius:8px;padding:10px;margin-bottom:8px;font-family:monospace;font-size:11px;color:#d0e8d0;line-height:1.6">
-      <div style="font-size:13px;color:#fff;margin-bottom:6px;font-style:italic">"${t.thought}"</div>
-      <div style="margin-top:4px">Mood: <span style="color:${t.mood>66?'#50e050':t.mood>33?'#e0c040':'#e04040'}">${t.moodLabel}</span>
-        <span style="display:inline-block;width:${Math.round(t.mood*0.7)}px;height:5px;background:${t.mood>66?'#50e050':t.mood>33?'#e0c040':'#e04040'};border-radius:3px;margin-left:6px;vertical-align:middle"></span>
+
+  // Thought bubble — only update the text node, leave rest of div intact
+  const thoughtEl=document.getElementById('patron-thought-text');
+  if(thoughtEl) thoughtEl.textContent='"'+t.thought+'"';
+
+  // Mood bar — update in place
+  const moodBar=document.getElementById('patron-mood-bar');
+  const moodLbl=document.getElementById('patron-mood-lbl');
+  const moodCol=t.mood>66?'#50e050':t.mood>33?'#e0c040':'#e04040';
+  if(moodBar){ moodBar.style.width=Math.round(t.mood*0.7)+'px'; moodBar.style.background=moodCol; }
+  if(moodLbl){ moodLbl.textContent=t.moodLabel; moodLbl.style.color=moodCol; }
+
+  // Stats grid — update values directly if elements exist
+  const el=id=>document.getElementById(id);
+  if(el('pp-spent'))  { el('pp-spent').textContent='$'+t.spent; }
+  if(el('pp-won'))    { el('pp-won').textContent='$'+t.won; }
+  if(el('pp-net'))    { el('pp-net').textContent=t.net; el('pp-net').style.color=t.netColor; }
+  if(el('pp-budget')) { el('pp-budget').textContent='$'+t.budget; }
+  if(el('pp-state'))  { el('pp-state').textContent=t.state.replace(/_/g,' '); }
+  if(el('pp-fav'))    { el('pp-fav').textContent=t.favMach; }
+  if(el('pp-visits')) { el('pp-visits').textContent=t.visits; }
+
+  // If panel body isn't built yet, build it fresh
+  if(!el('patron-thought-text')) {
+    document.getElementById('patron-panel-body').innerHTML=`
+      <div style="background:rgba(0,0,0,.35);border-radius:8px;padding:10px;margin-bottom:8px;font-family:monospace;font-size:11px;color:#d0e8d0;line-height:1.6">
+        <div id="patron-thought-text" style="font-size:13px;color:#fff;margin-bottom:6px;font-style:italic">"${t.thought}"</div>
+        <div style="margin-top:4px">Mood: <span id="patron-mood-lbl" style="color:${moodCol}">${t.moodLabel}</span>
+          <span id="patron-mood-bar" style="display:inline-block;width:${Math.round(t.mood*0.7)}px;height:5px;background:${moodCol};border-radius:3px;margin-left:6px;vertical-align:middle"></span>
+        </div>
       </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">
-      <div class="mstat-box"><div class="mstat-lbl">Spent</div><div class="mstat-val">$${t.spent}</div></div>
-      <div class="mstat-box"><div class="mstat-lbl">Won</div><div class="mstat-val">$${t.won}</div></div>
-      <div class="mstat-box"><div class="mstat-lbl">Net</div><div class="mstat-val" style="color:${t.netColor}">${t.net}</div></div>
-      <div class="mstat-box"><div class="mstat-lbl">Budget Left</div><div class="mstat-val">$${t.budget}</div></div>
-    </div>
-    <div style="font-size:10px;color:var(--text-muted);line-height:1.8">
-      <div>State: <span style="color:#c9a84c">${t.state.replace(/_/g,' ')}</span></div>
-      <div>Favourite: <span style="color:#c9a84c">${t.favMach}</span></div>
-      <div>Visits: <span style="color:#c9a84c">${t.visits}</span></div>
-    </div>`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">
+        <div class="mstat-box"><div class="mstat-lbl">Spent</div><div class="mstat-val" id="pp-spent">$${t.spent}</div></div>
+        <div class="mstat-box"><div class="mstat-lbl">Won</div><div class="mstat-val" id="pp-won">$${t.won}</div></div>
+        <div class="mstat-box"><div class="mstat-lbl">Net</div><div class="mstat-val" id="pp-net" style="color:${t.netColor}">${t.net}</div></div>
+        <div class="mstat-box"><div class="mstat-lbl">Budget Left</div><div class="mstat-val" id="pp-budget">$${t.budget}</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);line-height:1.8">
+        <div>State: <span id="pp-state" style="color:#c9a84c">${t.state.replace(/_/g,' ')}</span></div>
+        <div>Favourite: <span id="pp-fav" style="color:#c9a84c">${t.favMach}</span></div>
+        <div>Visits: <span id="pp-visits" style="color:#c9a84c">${t.visits}</span></div>
+      </div>`;
+  }
 }
+
 function tickPatronPanel(){
   if(!_patronPanelPid) return;
   const p=G.patrons.find(p=>p.id===_patronPanelPid);
   if(!p){ closePatronPanel(); return; }
-  if(!tickPatronPanel._c) tickPatronPanel._c=0;
-  if(++tickPatronPanel._c%30===0) renderPatronPanel(p);
+  if(!tickPatronPanel._c)    tickPatronPanel._c=0;
+  if(!tickPatronPanel._lastState) tickPatronPanel._lastState='';
+  tickPatronPanel._c++;
+
+  // Stats (spent, won, budget, mood) refresh every 10 frames
+  if(tickPatronPanel._c%10===0) renderPatronPanel(p, false);
+
+  // Thought text only refreshes on state change OR every ~300 frames (~5s)
+  const stateKey = p.state+'|'+(p._won?'w':'l')+'|'+Math.floor((p._mood||100)/20);
+  if(stateKey !== tickPatronPanel._lastState || tickPatronPanel._c%300===0) {
+    tickPatronPanel._lastState = stateKey;
+    renderPatronPanel(p, true);
+  }
 }
 
 function saveGame(){
   try {
+    // Serialise patrons — strip ephemeral render state, keep AI/economic data
+    const savedPatrons = G.patrons.map(p=>({
+      id:p.id, name:p.name, color:p.color, hairColor:p.hairColor,
+      wx:p.wx, wy:p.wy,
+      state: (p.state==='PLAYING'||p.state==='IDLE_AT_TABLE') ? 'ENTERING' : p.state,
+      targetX:p.targetX, targetY:p.targetY, speed:p.speed,
+      budget:p.budget, ticketValue:p.ticketValue, ticketPaid:p.ticketPaid,
+      wantsFood:p.wantsFood, foodState:p.foodState,
+      machineId:null,  // machines will be reoccupied fresh on load
+      tableId:p.tableId||null, tableSeat:p.tableSeat||0,
+      _spentTotal:p._spentTotal||0, _wonTotal:p._wonTotal||0,
+      _machineVisits:p._machineVisits||{}, _favMachine:p._favMachine||null,
+      _mood:p._mood!=null?p._mood:100,
+    }));
     localStorage.setItem('casinoEmpireV5',JSON.stringify({
       v:5, money:G.money, totalEarned:G.totalEarned, day:G.day,
+      dayOfWeek:G.dayOfWeek||4,
       speed:G.speed, floorLevel:G.floorLevel,
       nextMid:G.nextMid, nextContactId:G.nextContactId,
+      nextPid:G.nextPid||1,
+      dayAcc:G.dayAcc||0,
       machines:G.machines.map(m=>({
         id:m.id,type:m.type,tx:m.tx,ty:m.ty,rotation:m.rotation||0,
         upgrades:m.upgrades,totalEarned:m.totalEarned||0
       })),
-      lostAndFoundContacts:G.lostAndFoundContacts
+      lostAndFoundContacts:G.lostAndFoundContacts,
+      patrons:savedPatrons,
     }));
     document.getElementById('save-lbl').textContent='Saved '+new Date().toLocaleTimeString();
   } catch(e){toast('Save failed!','r');}
@@ -1050,6 +1151,7 @@ function loadGame(){
     const d=JSON.parse(raw); if(!d||d.v<5) return false;
     G.money=d.money||5000; G.totalEarned=d.totalEarned||0;
     G.day=d.day||1; G.speed=d.speed||1;
+    G.dayOfWeek=d.dayOfWeek!=null?d.dayOfWeek:4;
     G.floorLevel=d.floorLevel||0;
     G.floorW=FLOOR_LEVELS[G.floorLevel].w;
     G.floorH=FLOOR_LEVELS[G.floorLevel].h;
@@ -1064,6 +1166,23 @@ function loadGame(){
     for(const m of G.machines) {
       if(MACHINE_DEFS[m.type]?.tableGame) initTableState(m);
     }
+    // Restore patron world state
+    G.nextPid = d.nextPid||1;
+    G.dayAcc  = d.dayAcc||0;
+    G.patrons = (d.patrons||[]).map(p=>({
+      ...p,
+      // Any patron that was mid-journey or stuck re-enters fresh
+      state: (p.state==='LEAVING'||p.state==='WAITING_CASHIER'||
+              p.state==='WAITING_KIOSK'||p.state==='WAITING_AT_BAR'||
+              p.state==='EATING'||p.state==='WAITING_JACKPOT'||
+              p.state==='IDLE_AT_TABLE'||p.state==='PLAYING')
+              ? 'ENTERING' : p.state,
+      playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
+      _kioskTimer:0, _barId:null, _retryAcc:0,
+      _machineVisits:p._machineVisits||{}, _favMachine:p._favMachine||null,
+      _mood:p._mood!=null?p._mood:100, _thought:null,
+      _watchTimer:0, machineId:null, tableId:null,
+    }));
     return true;
   } catch(e){return false;}
 }
@@ -1101,8 +1220,18 @@ function loop(ts){
 
   G.spawnAcc+=dt;
   const slotCt=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot).length;
-  const spawnDelay=Math.max(2500,G.spawnCooldown/(1+slotCt*.25));
-  if(G.spawnAcc>=spawnDelay){G.spawnAcc=0;spawnPatron();}
+  const spawnMult = getSpawnMultiplier();
+
+  // Cap scales with time+day: busier periods allow more patrons on floor
+  const baseCap = 18;
+  const cap = Math.max(6, Math.floor(baseCap * spawnMult));
+
+  // Delay: only speed up during peak (mult>1), never slow below 80% of base rate
+  // Clamp divisor to 0.8–∞ so quiet hours aren't glacially slow
+  const baseDelay = Math.max(2000, G.spawnCooldown/(1+slotCt*.25));
+  const spawnDelay = baseDelay / Math.max(0.8, spawnMult);
+
+  if(G.spawnAcc>=spawnDelay && G.patrons.length<cap){G.spawnAcc=0;spawnPatron();}
 
   G.dayAcc+=rawDt;
   if(G.dayAcc>=G.dayLen){G.dayAcc=0;endDay();}

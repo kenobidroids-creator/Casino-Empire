@@ -541,56 +541,153 @@ function drawEmployee(e) {
 // ════════════════════════════════════════════
 
 // ── Band Stage ─────────────────────────────
-function drawBandSprite(m,def,x,y,w,h) {
-  const t=Date.now();
-  const beat=(t%800)/800;  // 0..1 per beat
+// ── Band / Entertainment stage ──────────────
+// Cycles through: full band, solo guitarist, singer, comedian
+const BAND_ACTS = ['band','guitarist','singer','comedian'];
+
+function drawBandSprite(m, def, x, y, w, h) {
+  const t = Date.now();
+  const beat = (t % 800) / 800;    // 0..1 per beat
+  const beatBop = Math.sin(beat * Math.PI * 2) * 2;
+
+  // Pick act — rotate every 45 seconds
+  if(!m._actIndex) m._actIndex = Math.floor(Math.random()*BAND_ACTS.length);
+  if(!m._actTimer) m._actTimer = 0;
+  m._actTimer += 16;
+  if(m._actTimer > 45000) { m._actTimer = 0; m._actIndex = (m._actIndex+1) % BAND_ACTS.length; }
+  const act = BAND_ACTS[m._actIndex];
 
   // Stage floor
-  const sg=ctx.createLinearGradient(x,y+h*.6,x,y+h);
+  const sg = ctx.createLinearGradient(x, y+h*.6, x, y+h);
   sg.addColorStop(0,'#2a1a08'); sg.addColorStop(1,'#1a0e04');
-  ctx.fillStyle=sg; ctx.fillRect(x,y+h*.6,w,h*.4);
+  ctx.fillStyle = sg; ctx.fillRect(x, y+h*.6, w, h*.4);
 
   // Backdrop curtain
-  ctx.fillStyle='#380010'; ctx.fillRect(x+2,y+2,w-4,h*.62);
-  // Curtain folds
+  ctx.fillStyle = '#380010'; ctx.fillRect(x+2, y+2, w-4, h*.62);
   for(let i=0;i<5;i++){
-    ctx.fillStyle=i%2===0?'#4a0018':'#300010';
-    ctx.fillRect(x+2+i*(w-4)/5,y+2,(w-4)/5,h*.62);
+    ctx.fillStyle = i%2===0 ? '#4a0018' : '#300010';
+    ctx.fillRect(x+2+i*(w-4)/5, y+2, (w-4)/5, h*.62);
   }
 
-  // Stage lights (animated)
-  const lightCols=['#ff6060','#6060ff','#60ff60','#ffff60'];
+  // Stage lights
+  const lightCols = ['#ff6060','#6060ff','#60ff60','#ffff60'];
   for(let i=0;i<3;i++){
     const lx=x+w*.2+i*w*.3, ly=y+4;
-    const on=((t+i*200)%600)<300;
-    ctx.fillStyle=on?lightCols[i]:lightCols[i].replace(/[0-9a-f]{2}/gi,'22');
+    const on = ((t+i*200)%600)<300;
+    ctx.fillStyle = on ? lightCols[i] : lightCols[i].replace(/[0-9a-f]{2}/gi,'22');
     ctx.beginPath(); ctx.arc(lx,ly,4,0,Math.PI*2); ctx.fill();
-    if(on){ctx.shadowColor=lightCols[i];ctx.shadowBlur=8;}
-    ctx.fillStyle=on?'rgba(255,255,255,.15)':'rgba(0,0,0,0)';
+    if(on){ ctx.shadowColor=lightCols[i]; ctx.shadowBlur=6; }
+    ctx.fillStyle = on ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,0)';
     ctx.beginPath();
     ctx.moveTo(lx,ly+4); ctx.lineTo(lx-10,y+h*.58); ctx.lineTo(lx+10,y+h*.58);
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur=0;
   }
 
-  // Band members (3 animated figures)
-  const bop=Math.sin(beat*Math.PI*2)*2;
-  const members=[
-    {cx:w*.25,ic:'🎸',c:'#e04040'},
-    {cx:w*.5, ic:'🎹',c:'#4080e0'},
-    {cx:w*.75,ic:'🎺',c:'#e0a040'},
-  ];
-  for(const bm of members){
-    const bx=x+bm.cx, by=y+h*.4+bop;
-    ctx.fillStyle=bm.c; ctx.font=`${Math.floor(h*.14)}px serif`;
-    ctx.textAlign='center'; ctx.textBaseline='bottom';
-    ctx.fillText(bm.ic,bx,by);
-  }
+  // Stage edge line
+  ctx.strokeStyle='rgba(255,180,50,.3)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x,y+h*.62); ctx.lineTo(x+w,y+h*.62); ctx.stroke();
 
-  // Label
-  ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
-  ctx.textAlign='center'; ctx.textBaseline='bottom';
-  ctx.fillText('LIVE BAND',x+w/2,y+h-2);
+  // ── Draw performers based on act ──
+  if(act==='band') {
+    // Full 3-piece band: guitarist, keyboardist, trumpeter
+    drawStagePerformer(m, x+w*.22, y+h*.4, beatBop, '#e04040', 'guitar');
+    drawStagePerformer(m, x+w*.5,  y+h*.38, beatBop*0.5, '#4080e0', 'keys');
+    drawStagePerformer(m, x+w*.78, y+h*.4, -beatBop, '#e0a040', 'trumpet');
+    ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('LIVE BAND', x+w/2, y+h-2);
+  } else if(act==='guitarist') {
+    drawStagePerformer(m, x+w*.5, y+h*.38, beatBop, '#e06030', 'guitar');
+    // Mic stand
+    ctx.strokeStyle='#888'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x+w*.4,y+h*.4); ctx.lineTo(x+w*.4,y+h*.6); ctx.stroke();
+    ctx.fillStyle='#aaa'; ctx.beginPath(); ctx.arc(x+w*.4,y+h*.4,2,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('SOLO ACT', x+w/2, y+h-2);
+  } else if(act==='singer') {
+    drawStagePerformer(m, x+w*.5, y+h*.37, beatBop, '#d040d0', 'singer');
+    // Mic in hand
+    ctx.fillStyle='#ccc'; ctx.fillRect(x+w*.5+4, y+h*.44, 2, 7);
+    ctx.beginPath(); ctx.arc(x+w*.5+5, y+h*.44, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('LIVE SINGER', x+w/2, y+h-2);
+  } else if(act==='comedian') {
+    // Comedian at mic stand — less bop, more sway
+    const sway = Math.sin(t/1200)*3;
+    drawStagePerformer(m, x+w*.5+sway, y+h*.38, 0, '#40a0e0', 'comedian');
+    // Mic stand
+    ctx.strokeStyle='#888'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x+w*.48,y+h*.42); ctx.lineTo(x+w*.48,y+h*.62); ctx.stroke();
+    ctx.fillStyle='#aaa'; ctx.beginPath(); ctx.arc(x+w*.48,y+h*.42,2,0,Math.PI*2); ctx.fill();
+    // Spotlight
+    ctx.fillStyle='rgba(255,255,100,.06)';
+    ctx.beginPath(); ctx.ellipse(x+w*.5,y+h*.5,w*.18,h*.22,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,180,0,.7)'; ctx.font=`bold ${Math.floor(w*.065)}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('COMEDY', x+w/2, y+h-2);
+  }
+}
+
+// ── Draw a pixel-art stage performer ────────
+function drawStagePerformer(m, cx, cy, bop, color, role) {
+  const by = bop || 0;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(cx, cy+14, 5, 2, 0, 0, Math.PI*2); ctx.fill();
+
+  // Legs
+  ctx.fillStyle = '#1a1a2a';
+  ctx.fillRect(cx-4, cy+6+by, 3, 7);
+  ctx.fillRect(cx+1,  cy+6+by, 3, 7);
+
+  // Torso / shirt
+  ctx.fillStyle = color;
+  ctx.fillRect(cx-4, cy-2+by, 8, 9);
+
+  // Head
+  ctx.fillStyle = '#f0c890';
+  ctx.fillRect(cx-3, cy-9+by, 6, 7);
+
+  // Hair (randomised per performer role)
+  const hairCol = role==='singer'?'#d060a0':role==='comedian'?'#2040c0':'#2a1a08';
+  ctx.fillStyle = hairCol;
+  ctx.fillRect(cx-3, cy-9+by, 6, 2);
+
+  // Eyes
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(cx-2, cy-6+by, 1, 1);
+  ctx.fillRect(cx+1,  cy-6+by, 1, 1);
+
+  // Instrument / prop
+  if(role==='guitar') {
+    ctx.fillStyle = '#8b4513';
+    ctx.fillRect(cx+3, cy-1+by, 2, 8);
+    ctx.fillStyle = '#c8761c';
+    ctx.beginPath(); ctx.ellipse(cx+4, cy+4+by, 3, 4, 0.3, 0, Math.PI*2); ctx.fill();
+    // String
+    ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=.5;
+    ctx.beginPath(); ctx.moveTo(cx+3,cy-1+by); ctx.lineTo(cx+5,cy+7+by); ctx.stroke();
+  } else if(role==='keys') {
+    // Keyboard
+    ctx.fillStyle = '#222';
+    ctx.fillRect(cx-7, cy+1+by, 14, 5);
+    ctx.fillStyle = '#fff';
+    for(let k=0;k<4;k++) ctx.fillRect(cx-6+k*3, cy+1+by, 2, 4);
+    ctx.fillStyle = '#111';
+    for(let k=0;k<3;k++) ctx.fillRect(cx-5+k*3, cy+1+by, 1, 3);
+  } else if(role==='trumpet') {
+    ctx.fillStyle = '#d4a820';
+    ctx.fillRect(cx+2, cy+1+by, 8, 2);
+    ctx.beginPath(); ctx.arc(cx+10, cy+2+by, 3, 0, Math.PI*2); ctx.fill();
+  } else if(role==='singer'||role==='comedian') {
+    // Arm raised slightly
+    ctx.fillStyle = color;
+    ctx.fillRect(cx+3, cy-1+by, 2, 5);
+  }
 }
 
 // ── Sportsbook ─────────────────────────────
@@ -600,23 +697,27 @@ function drawBandSprite(m,def,x,y,w,h) {
 // ── TV Screen ──────────────────────────────
 function drawTvScreenSprite(m,def,x,y,w,h) {
   const t=Date.now();
+  // Outer TV casing
   ctx.fillStyle='#08080c'; prect(x+2,y+2,w-4,h-4,4); ctx.fill();
   ctx.strokeStyle='rgba(80,120,200,.3)'; ctx.lineWidth=1;
   prect(x+2,y+2,w-4,h-4,4); ctx.stroke();
 
-  // Screen
-  const sx2=x+5,sy2=y+5,sw=w-10,sh=h-14;
-  ctx.fillStyle='#04080c'; ctx.fillRect(sx2,sy2,sw,sh);
-  // Animated content
-  ctx.fillStyle='rgba(80,120,200,.05)';
-  for(let ln=0;ln<sh;ln+=2) ctx.fillRect(sx2,sy2+ln,sw,1);
-  // Channel number
-  ctx.fillStyle='rgba(80,120,200,.6)'; ctx.font=`bold ${Math.floor(sw*.3)}px monospace`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(m._channel||'📺',sx2+sw/2,sy2+sh*.4);
+  // Screen area — show a cycling sport
+  const sx2=x+4, sy2=y+4, sw=w-8, sh=h-10;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(sx2,sy2,sw,sh); ctx.clip();
+  ctx.translate(sx2,sy2);
+  // Each TV picks its own sport from sports.js
+  const sport=getSportForMachine(m);
+  SPORT_ANIM[sport](ctx,sw,sh,t);
+  ctx.translate(-sx2,-sy2);
+  ctx.restore();
+  ctx.strokeStyle='rgba(80,120,200,.25)'; ctx.lineWidth=.5; ctx.strokeRect(sx2,sy2,sw,sh);
+
   // Stand
-  ctx.fillStyle='#141418'; ctx.fillRect(x+w*.35,y+h-6,w*.3,4);
-  ctx.fillRect(x+w*.2,y+h-4,w*.6,3);
+  ctx.fillStyle='#141418';
+  ctx.fillRect(x+w*.35,y+h-5,w*.3,3);
+  ctx.fillRect(x+w*.2,y+h-3,w*.6,3);
 }
 
 // ── Blackjack Table ─────────────────────────

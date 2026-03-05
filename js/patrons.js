@@ -5,7 +5,7 @@
 const HAIR_COLORS=['#3a2808','#1a1008','#c8a040','#a06020','#e0c890','#202020','#e04040'];
 
 function spawnPatron() {
-  if(G.patrons.length>=22) return;
+  // Cap is managed by the game loop using getSpawnMultiplier()
   // Spawn if there's any machine patrons can interact with
   const hasMachines=G.machines.some(m=>{
     const def=MACHINE_DEFS[m.type];
@@ -100,6 +100,17 @@ function updatePatron(p,dt) {
 }
 
 function updatePlaying(p,dt) {
+  const m=G.machines.find(m=>m.id===p.machineId);
+  // Band / sportsbook watcher — just count down and leave
+  if(m && (MACHINE_DEFS[m.type].isBand || MACHINE_DEFS[m.type].isSportsbook)) {
+    p._watchTimer = (p._watchTimer||20000) - dt;
+    if(p._watchTimer <= 0) {
+      p.machineId=null;
+      afterPlayment(p);
+    }
+    return;
+  }
+
   p.playTimer+=dt;
 
   if(p.spinsLeft>0 && p.playTimer>=p.spinInterval) {
@@ -236,6 +247,12 @@ function startPlaying(p) {
   const m=G.machines.find(m=>m.id===p.machineId);
   if(!m){kickOut(p);return;}
   const def=MACHINE_DEFS[m.type];
+  if(def.isBand||def.isSportsbook) {
+    // Watchers stay for 15-40 seconds, then leave
+    p._watchTimer = 15000 + Math.random()*25000;
+    p._thought = pickThought(p, def.isSportsbook?'sports':'enter');
+    return;
+  }
   p.spinInterval=def.playTime*(1-(m.upgrades.speed||0)*.18);
   p.spinsLeft=3+Math.floor(Math.random()*7);
   p.playTimer=0; p._won=false;
@@ -418,33 +435,39 @@ function pickThought(p, ctx) {
   return pool[Math.floor(Math.random()*pool.length)];
 }
 
-function computePatronThought(p) {
-  // Build a rich thought object for the click panel
+function computePatronThought(p, forceThought=true) {
   const spent=p._spentTotal||0, won=p._wonTotal||0;
   const mood=p._mood!=null?p._mood:100;
   const moodEmoji=mood>75?'😊':mood>50?'😐':mood>25?'😟':'😤';
   const moodLabel=mood>75?'Happy':mood>50?'Neutral':mood>25?'Frustrated':'Angry';
 
-  // Current thought
-  let currentThought=p._thought;
-  if(!currentThought) {
-    if(p.state==='ENTERING') currentThought=pickThought(p,'enter');
-    else if(p.state==='PLAYING') currentThought=p._won?pickThought(p,'win'):pickThought(p,'lose');
-    else if(p.state==='WAITING_MACHINE') currentThought=pickThought(p,'full');
-    else if(p.state==='LEAVING') currentThought=pickThought(p,'leave');
-    else if(p.state==='WAITING_AT_BAR'||p.state==='EATING') currentThought=pickThought(p,'eat');
-    else if(p.state==='IDLE_AT_TABLE') currentThought=pickThought(p,'table');
-    else currentThought=pickThought(p,'enter');
-    p._thought=currentThought;
+  // Only pick a new thought when forced (state change / timer) — otherwise reuse cache
+  let thought = p._thought;
+  if(forceThought || !thought) {
+    if(p.state==='ENTERING')                         thought=pickThought(p,'enter');
+    else if(p.state==='PLAYING') {
+      const m=G.machines.find(m=>m.id===p.machineId);
+      if(m&&(MACHINE_DEFS[m.type]?.isSportsbook))    thought=pickThought(p,'sports');
+      else if(m&&MACHINE_DEFS[m.type]?.isBand)       thought=pickThought(p,'enter');
+      else thought=p._won ? pickThought(p,'win') : pickThought(p,'lose');
+    }
+    else if(p.state==='WAITING_MACHINE')              thought=pickThought(p,'full');
+    else if(p.state==='LEAVING')                      thought=pickThought(p,'leave');
+    else if(p.state==='WAITING_AT_BAR'||p.state==='EATING') thought=pickThought(p,'eat');
+    else if(p.state==='IDLE_AT_TABLE')                thought=pickThought(p,'table');
+    else if(p.state==='WAITING_JACKPOT')              thought=pickThought(p,'jackpot');
+    else if(won>(spent*1.3)&&spent>0)                 thought=pickThought(p,'rich');
+    else if(p.budget<3&&spent>0)                      thought=pickThought(p,'poor');
+    else                                              thought=pickThought(p,'enter');
+    p._thought=thought;
   }
 
-  // Favourite machine
   const favMach=p._favMachine?MACHINE_DEFS[p._favMachine]?.name||p._favMachine:'None yet';
   const netResult=won-spent;
 
   return {
     name:p.name, moodEmoji, moodLabel, mood,
-    thought:currentThought,
+    thought,
     spent:spent.toFixed(2),
     won:won.toFixed(2),
     net:(netResult>=0?'+':'')+netResult.toFixed(2),
@@ -452,7 +475,7 @@ function computePatronThought(p) {
     budget:p.budget.toFixed(2),
     favMach,
     state:p.state,
-    visits:Object.entries(p._machineVisits||{}).map(([t,n])=>`${MACHINE_DEFS[t]?.name||t}: ${n}x`).join(', ')||'—',
+    visits:Object.entries(p._machineVisits||{}).map(([t,n])=>`${MACHINE_DEFS[t]?.name||t}: ${n}×`).join(', ')||'—',
   };
 }
 
@@ -493,6 +516,10 @@ function onPatronArrival(p) {
     case 'WALKING_TO_TABLE':
       p.state='IDLE_AT_TABLE';
       break;
+    case 'LEAVING':
+      // Patron has reached the exit — remove from world
+      G.patrons = G.patrons.filter(x => x.id !== p.id);
+      break;
   }
 }
 
@@ -509,4 +536,31 @@ function createFoodOrder(p) {
   });
   p.foodState='ordering';
   toast(p.name+' orders '+item.icon+' '+item.name);
+}
+
+// ── Time-of-day + day-of-week spawn multiplier ────────────────────────────
+// Day maps 0→1 as 6 PM → 6 AM (12-hour casino night)
+// Peaks around midnight (pct ≈ 0.5)
+function getSpawnMultiplier() {
+  const pct = Math.min(1, (G.dayAcc||0) / G.dayLen);
+
+  // Time-of-day curve: quiet open → ramp → peak → late-night taper
+  // pct 0   = 6 PM  (opening, trickling in)
+  // pct 0.2 = 8 PM  (picking up)
+  // pct 0.5 = midnight (peak)
+  // pct 0.75= 3 AM  (winding down)
+  // pct 1.0 = 6 AM  (almost empty)
+  let timeMult;
+  if      (pct < 0.15) timeMult = 0.4 + pct/0.15 * 0.5;   // 6–8 PM: 0.4→0.9
+  else if (pct < 0.45) timeMult = 0.9 + (pct-0.15)/0.30 * 0.6; // 8 PM–midnight: 0.9→1.5
+  else if (pct < 0.60) timeMult = 1.5;                     // midnight–1 AM: peak
+  else if (pct < 0.80) timeMult = 1.5 - (pct-0.60)/0.20 * 0.7; // 1–3 AM: 1.5→0.8
+  else                 timeMult = 0.8 - (pct-0.80)/0.20 * 0.6; // 3–6 AM: 0.8→0.2
+
+  // Day-of-week multiplier
+  const dow = G.dayOfWeek || 0; // 0=Mon … 6=Sun
+  const DAY_MULT = [0.7, 0.75, 0.85, 0.95, 1.2, 1.6, 1.4]; // Mon–Sun
+  const dayMult = DAY_MULT[dow % 7];
+
+  return timeMult * dayMult;
 }
