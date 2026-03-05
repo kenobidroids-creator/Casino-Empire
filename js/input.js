@@ -293,9 +293,21 @@ function exitPlacementMode(){
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     if(G.moveMode) cancelMove();
-    else exitPlacementMode();
+    else if(G.placementSelected) exitPlacementMode();
+    else closeEditPopup();
   }
-  if(e.key==='r'||e.key==='R') rotatePlacement();
+  if(e.key==='r'||e.key==='R'){
+    if(G._editPopupMid) editPopRotate();
+    else rotatePlacement();
+  }
+});
+
+// Right-click cancels placement / closes edit popup
+canvas.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  if(G.placementSelected) exitPlacementMode();
+  else if(G.moveMode) cancelMove();
+  else closeEditPopup();
 });
 
 // ══════════════════════════════════════════
@@ -335,21 +347,12 @@ function handleCanvasClick(sx,sy){
   const m=findMachineAtTile(t.tx,t.ty);
 
   if(m){
-    if(G.deleteMode){
-      const def=MACHINE_DEFS[m.type], val=Math.floor(def.cost*.5);
-      if(confirm('Remove '+def.name+'? Get $'+val+' back.')){
-        if(m.occupied!=null){const p=G.patrons.find(p=>p.id===m.occupied);if(p){p.machineId=null;kickOut(p);}}
-        G.machines=G.machines.filter(x=>x.id!==m.id);
-        G.money+=val; toast('Sold for $'+val,'g');
-      }
-    } else {
-      if(G.jackpots.find(j=>j.machineId===m.id)){handleJackpotClick(m.id);return;}
-      // Cashier and bar have primary click actions; long-press (R key) goes to manage
-      if(m.type==='cashier')           openCashierPanel();
-      else if(m.type==='bar')          handleBarClick(m.id);
-      else if(m.type==='surveillance') openSurveillancePanel();
-      else                             openMachineManagePanel(m.id);
-    }
+    if(G.jackpots.find(j=>j.machineId===m.id)){handleJackpotClick(m.id);return;}
+    // Primary click opens action/manage panel
+    if(m.type==='cashier')           openCashierPanel();
+    else if(m.type==='bar')          handleBarClick(m.id);
+    else if(m.type==='surveillance') openSurveillancePanel();
+    else                             openMachineManagePanel(m.id);
     return;
   }
 
@@ -454,12 +457,9 @@ function updateHotbarAfford(){
 
 function updateFoundMoneyBadge(){
   const b=document.getElementById('found-money-badge');
-  if(!b) return;
+  if(b) b.style.display='none'; // hide old badge
   if(G.collectedMoneyPool>0){
-    b.style.display='inline';
-    b.textContent='💰 $'+G.collectedMoneyPool.toFixed(2)+' found';
-  } else {
-    b.style.display='none';
+    notif('💰 $'+G.collectedMoneyPool.toFixed(2)+' found money', 'g', null, '');
   }
 }
 
@@ -468,7 +468,8 @@ function updateFoundMoneyBadge(){
 // ══════════════════════════════════════════
 function toggleDelete(){
   G.deleteMode=!G.deleteMode;
-  document.getElementById('del-btn').classList.toggle('active',G.deleteMode);
+  const btn=document.getElementById('del-btn');
+  if(btn) btn.classList.toggle('active',G.deleteMode);
   canvas.className=G.deleteMode?'deleting':(G.placementSelected||G.dragging||G.moveMode)?'placing':'';
 }
 
@@ -480,3 +481,61 @@ function setSpd(s){
 function rotatePlacement(){
   G.placementRotation=(G.placementRotation+1)%4;
 }
+
+// ══════════════════════════════════════════
+//  Edit Popup (Move / Rotate / Remove)
+// ══════════════════════════════════════════
+function openEditPopup(mid, screenX, screenY) {
+  G._editPopupMid = mid;
+  const popup = document.getElementById('edit-popup');
+  popup.style.display = 'flex';
+  // Position near click, clamp to viewport
+  const pw = 230, ph = 46;
+  let lx = Math.min(screenX - pw/2, window.innerWidth  - pw - 8);
+  let ly = Math.min(screenY + 12,   window.innerHeight - ph - 8);
+  lx = Math.max(8, lx);
+  ly = Math.max(8, ly);
+  popup.style.left = lx + 'px';
+  popup.style.top  = ly + 'px';
+}
+
+function closeEditPopup() {
+  G._editPopupMid = null;
+  const popup = document.getElementById('edit-popup');
+  if(popup) popup.style.display = 'none';
+}
+
+function editPopRotate() {
+  const m = G.machines.find(m=>m.id===G._editPopupMid);
+  if(!m) { closeEditPopup(); return; }
+  m.rotation = ((m.rotation||0)+1)%4;
+  toast('Rotated '+MACHINE_DEFS[m.type].name,'');
+  // keep popup open for further edits
+}
+
+function editPopMove() {
+  const mid = G._editPopupMid;
+  closeEditPopup();
+  startMoveMode(mid);
+}
+
+function editPopRemove() {
+  const m = G.machines.find(m=>m.id===G._editPopupMid);
+  if(!m) { closeEditPopup(); return; }
+  const def = MACHINE_DEFS[m.type], val = Math.floor(def.cost*.5);
+  if(confirm('Remove '+def.name+'? Get $'+val+' back.')) {
+    if(m.occupied!=null){const p=G.patrons.find(p=>p.id===m.occupied);if(p){p.machineId=null;kickOut(p);}}
+    G.machines = G.machines.filter(x=>x.id!==m.id);
+    G.money += val;
+    toast('Sold for $'+val,'g');
+  }
+  closeEditPopup();
+}
+
+// Close edit popup when clicking outside it
+document.addEventListener('pointerdown', e=>{
+  const popup = document.getElementById('edit-popup');
+  if(popup && popup.style.display==='flex' && !popup.contains(e.target)) {
+    closeEditPopup();
+  }
+});

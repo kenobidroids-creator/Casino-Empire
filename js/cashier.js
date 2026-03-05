@@ -3,23 +3,46 @@
 // ═══════════════════════════════════════════
 
 function updateCashierAlert() {
-  const open=document.getElementById('cashier-panel').style.display==='block';
-  document.getElementById('cashier-alert').style.display=
-    G.cashierQueue.length>0&&!open?'block':'none';
+  const open = document.getElementById('cashier-panel').style.display==='block';
+  const waiting = G.cashierQueue.length;
+  if(waiting > 0 && !open) {
+    const cashier = G.machines.find(m=>m.type==='cashier');
+    notif(
+      waiting===1 ? 'Patron waiting at cashier' : `${waiting} patrons at cashier`,
+      '',
+      () => { openCashierPanel(); centerOnMachine(cashier); },
+      '💵'
+    );
+  } else {
+    dismissNotif('Patron waiting at cashier');
+    for(let i=2;i<=10;i++) dismissNotif(`${i} patrons at cashier`);
+  }
 }
 
 function openCashierPanel() {
-  if(G.cashierQueue.length===0){toast('No patrons in queue!');return;}
   const cashier=G.machines.find(m=>m.type==='cashier');
   if(!cashier){toast('Place a Cashier Window first!','r');return;}
 
-  // Flush stale entries
+  // Flush stale queue entries
   while(G.cashierQueue.length>0) {
     const p=G.patrons.find(p=>p.id===G.cashierQueue[0]);
     if(p){G.cashierServing=p;break;}
     G.cashierQueue.shift();
   }
-  if(!G.cashierServing){updateCashierAlert();return;}
+  if(!G.cashierServing && G.cashierQueue.length===0) {
+    // No patrons — open in idle/management mode
+    document.getElementById('cpat-name').textContent='No patrons waiting';
+    document.getElementById('ctick').textContent='$0.00';
+    document.getElementById('till-wrap') && (document.getElementById('till-wrap').style.display='none');
+    document.getElementById('pay-area').innerHTML='<span class="pay-placeholder">No patron to serve</span>';
+    document.getElementById('pay-total').textContent='';
+    document.getElementById('queue-info').textContent='Cashier is idle';
+    document.getElementById('cashier-panel').style.display='block';
+    return;
+  }
+
+  const tw = document.getElementById('till-wrap');
+  if(tw) tw.style.display='block';
 
   G.payTray=[];
   document.getElementById('cpat-name').textContent=G.cashierServing.name+"'s Ticket";

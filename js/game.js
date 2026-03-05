@@ -9,6 +9,55 @@ function calcRevPerMin(){
   return G.revBucket.reduce((s,r)=>s+r.v,0);
 }
 
+// ── Notification Rail ────────────────────────────────
+// notif(msg, type, action, icon)
+// type: ''|'g'|'r'   action: fn to call on click (optional)
+const _notifs = [];  // live notification objects
+
+function notif(msg, type='', action=null, icon='') {
+  const rail = document.getElementById('notif-rail');
+  if(!rail) { toast(msg, type); return; }
+
+  // Deduplicate — don't stack identical messages
+  if(_notifs.find(n => n.msg === msg)) return;
+
+  const el = document.createElement('div');
+  el.className = 'notif' + (type ? ' '+type : '');
+  el.innerHTML = (icon ? `<span class="notif-icon">${icon}</span>` : '') +
+    `<span class="notif-text">${msg}</span>` +
+    `<span class="notif-close">✕</span>`;
+
+  const obj = { el, msg };
+  _notifs.push(obj);
+  rail.appendChild(el);
+
+  const dismiss = () => {
+    el.classList.add('fading');
+    setTimeout(() => {
+      el.remove();
+      const i = _notifs.indexOf(obj);
+      if(i >= 0) _notifs.splice(i, 1);
+    }, 320);
+  };
+
+  el.querySelector('.notif-close').addEventListener('click', e => {
+    e.stopPropagation(); dismiss();
+  });
+
+  if(action) {
+    el.querySelector('.notif-text').style.cursor = 'pointer';
+    el.querySelector('.notif-text').addEventListener('click', () => { action(); dismiss(); });
+  }
+
+  // Auto-dismiss after 8 seconds (actionable ones stay longer)
+  setTimeout(dismiss, action ? 12000 : 5000);
+}
+
+function dismissNotif(msg) {
+  const obj = _notifs.find(n => n.msg === msg);
+  if(obj) { obj.el.classList.add('fading'); setTimeout(()=>{ obj.el.remove(); _notifs.splice(_notifs.indexOf(obj),1); }, 320); }
+}
+
 function toast(msg,cls=''){
   const c=document.getElementById('toasts');
   const t=document.createElement('div');
@@ -25,28 +74,26 @@ function updateHUD(){
   document.getElementById('h-day').textContent  =G.day;
   document.getElementById('h-emp').textContent  =G.employees.length;
 
-  // Day progress bar + time-of-day
+  // Day progress bar + time-of-day (6 AM open → 4 AM close, 22-hour day)
   const pct = Math.min(1, (G.dayAcc||0) / G.dayLen);
   document.getElementById('h-daybar-fill').style.width = (pct*100).toFixed(1)+'%';
-  // Map 0–1 to casino hours: 6 PM → 6 AM (12 hours)
-  const totalMins = pct * 720;
-  const rawHour = 18 + Math.floor(totalMins / 60);
-  const hour = rawHour % 24;
-  const min  = Math.floor(totalMins % 60);
+  const totalMins = pct * 1320;           // 22 hours mapped across day
+  const rawMins   = 6*60 + totalMins;     // starts 6:00 AM
+  const hour = Math.floor(rawMins/60) % 24;
+  const min  = Math.floor(rawMins % 60);
   const ampm = hour < 12 ? 'AM' : 'PM';
   const h12  = hour % 12 || 12;
-  document.getElementById('h-daytime').textContent =
-    h12 + ':' + String(min).padStart(2,'0') + ' ' + ampm;
+  const clockEl = document.getElementById('h-daytime');
+  if(clockEl) clockEl.textContent = h12+':'+String(min).padStart(2,'0')+' '+ampm;
 
   // Day-of-week label + busy indicator
   const DOW_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const DOW_BUSY  = [false,false,false,false,true,true,true]; // Fri–Sun highlighted
+  const DOW_BUSY  = [false,false,false,false,true,true,true];
   const dow = (G.dayOfWeek||4) % 7;
   const dowEl = document.getElementById('h-dow');
   if(dowEl) {
     dowEl.textContent = DOW_NAMES[dow];
-    dowEl.style.color = DOW_BUSY[dow] ? '#ffcc44' : 'var(--text-muted)';
-    dowEl.title = DOW_BUSY[dow] ? 'Busy night!' : 'Quiet night';
+    dowEl.style.color = DOW_BUSY[dow] ? '#ffcc44' : 'rgba(201,168,76,.4)';
   }
 
   updateHotbarAfford();
@@ -95,15 +142,19 @@ function endDay(){
   G.dayStats.wages+=wages;
   G._prePauseSpeed = G._prePauseSpeed || G.speed || 1;
   G.speed=0;
-  G.dayAcc=0;  // reset so next day starts fresh
-  openDayEndModal(wages);
-  const prev={...G.dayStats};
+  G.dayAcc=0;
+
+  // Dismiss all patrons at day end (they leave before next day starts)
+  for(const p of G.patrons) kickOut(p);
+
+  // Snapshot stats BEFORE opening modal (modal reads them), THEN reset
+  const snapshot = {...G.dayStats};
+  openDayEndModal(wages, snapshot);
   G.dayStats={patronsVisited:0,moneyIn:0,moneyOut:0,wages:0,tips:0,foundMoney:0,jackpotsPaid:0};
-  return prev;
 }
 
-function openDayEndModal(wages){
-  const ds=G.dayStats;
+function openDayEndModal(wages, snapshot){
+  const ds = snapshot || G.dayStats;  // use passed snapshot so we read pre-reset stats
   const net=ds.moneyIn-ds.moneyOut-wages-ds.jackpotsPaid;
   const DOW_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const DOW_BUSY  = [false,false,false,false,true,true,true];
@@ -708,7 +759,12 @@ function panCameraToWorld(wx,wy){
   G.camera.y = Math.round(canvas.height/2 - wy - 60);
   clampCam();
   closeSurveillancePanel();
-  toast('Camera panned to location');
+}
+
+function centerOnMachine(m){
+  if(!m) return;
+  const wp = tile2world(m.tx,m.ty);
+  panCameraToWorld(wp.x+TILE/2, wp.y+TILE/2);
 }
 
 // ── Lost & Found contact management ────────
@@ -1140,7 +1196,8 @@ function saveGame(){
       lostAndFoundContacts:G.lostAndFoundContacts,
       patrons:savedPatrons,
     }));
-    document.getElementById('save-lbl').textContent='Saved '+new Date().toLocaleTimeString();
+    const lbl=document.getElementById('save-lbl2')||document.getElementById('save-lbl');
+    if(lbl) lbl.textContent='Saved '+new Date().toLocaleTimeString();
   } catch(e){toast('Save failed!','r');}
 }
 

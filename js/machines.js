@@ -211,3 +211,11 @@ function closeUpgradePanel() {
 function openMachineManagePanel(mid) {
   openUpgradePanel(mid);
 }
+
+function openEditFromPanel() {
+  const mid = G.selectedMid;
+  if(!mid) return;
+  closeUpgradePanel();
+  // Position popup near centre of screen
+  openEditPopup(mid, window.innerWidth/2, window.innerHeight/2);
+}

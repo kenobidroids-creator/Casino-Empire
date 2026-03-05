@@ -14,8 +14,6 @@
 
 <!-- HUD -->
 <div id="hud">
-  <span id="hud-title">Casino Empire</span>
-  <div class="hud-sep"></div>
   <div class="hud-stat"><span class="hud-label">Balance</span><span class="hud-val" id="h-money">$5,000</span></div>
   <div class="hud-sep"></div>
   <div class="hud-stat"><span class="hud-label">Rev/min</span><span class="hud-val" id="h-rev">$0</span></div>
@@ -25,48 +23,52 @@
   <div class="hud-stat"><span class="hud-label">Staff</span><span class="hud-val" id="h-emp">0</span></div>
   <div class="hud-sep"></div>
   <div class="hud-stat hud-time-stat">
-    <span class="hud-label">Day <span id="h-day">1</span> &mdash; <span id="h-dow" style="color:var(--gold-light)">Fri</span></span>
-    <div id="h-daybar-wrap">
-      <div id="h-daybar-fill"></div>
-      <span id="h-daytime">6:00 PM</span>
+    <div class="hud-day-row">
+      <span class="hud-label">Day <span id="h-day">1</span></span>
+      <span id="h-dow" class="hud-dow">Fri</span>
+      <span id="h-daytime" class="hud-clock">6:00 AM</span>
     </div>
+    <div id="h-daybar-wrap"><div id="h-daybar-fill"></div></div>
   </div>
 </div>
 
 <!-- Top Controls -->
 <div id="controls">
-  <div class="ctrl-group">
-    <button class="ctrl-btn danger" id="del-btn" onclick="toggleDelete()">Remove</button>
-    <button class="ctrl-btn" onclick="saveGame()">Save</button>
-    <span id="save-lbl">auto-saves 30s</span>
-    <span id="placement-label"></span>
-    <span id="found-money-badge"></span>
-  </div>
-  <div class="ctrl-group">
-    <button class="ctrl-btn" id="expand-btn" onclick="expandFloor()" style="display:none">Expand Floor</button>
-    <button class="ctrl-btn" onclick="openManagementWindow()">Management</button>
-    <button class="ctrl-btn" onclick="rotatePlacement()" title="Rotate (R key)">Rotate</button>
+  <div class="ctrl-group" id="speed-group">
     <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1x</button>
     <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2x</button>
     <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3x</button>
+  </div>
+  <div class="ctrl-group" id="right-group">
+    <span id="placement-label"></span>
+    <span id="found-money-badge"></span>
+    <span id="save-lbl">auto-saves 30s</span>
     <button class="ctrl-btn" onclick="openManagementWindow()">Management</button>
-    <button class="ctrl-btn" onclick="openMinigame()">Play Slots</button>
   </div>
 </div>
 
 <!-- Carrying indicator -->
 <div id="carry-bar"></div>
 
-<!-- Place cancel -->
+<!-- Place cancel / placement toolbar -->
 <div id="place-cancel-btn">
-  <button class="ctrl-btn" onclick="rotatePlacement()">Rotate</button>
-  <button class="ctrl-btn danger" onclick="exitPlacementMode()">Cancel</button>
+  <button class="ctrl-btn" onclick="rotatePlacement()" title="R key">↻ Rotate</button>
+  <button class="ctrl-btn danger" onclick="exitPlacementMode()" title="Esc">✕ Cancel</button>
 </div>
 
-<!-- Cashier alert -->
-<div id="cashier-alert">
-  <div class="cashier-badge" onclick="openCashierPanel()">Patron waiting at cashier</div>
+<!-- Edit popup (move/rotate/remove for placed machines) -->
+<div id="edit-popup" style="display:none">
+  <button class="edit-pop-btn" onclick="editPopRotate()" title="R key">↻ Rotate</button>
+  <button class="edit-pop-btn" onclick="editPopMove()">⤢ Move</button>
+  <button class="edit-pop-btn danger" onclick="editPopRemove()">🗑 Remove</button>
+  <button class="edit-pop-btn close" onclick="closeEditPopup()">✕</button>
 </div>
+
+<!-- Notification rail (left side) -->
+<div id="notif-rail"></div>
+
+<!-- Cashier alert (legacy compat) -->
+<div id="cashier-alert" style="display:none"></div>
 
 <!-- Drag ghost -->
 <div id="drag-ghost"></div>
@@ -80,7 +82,9 @@
   <h2 id="upg-title">Machine</h2>
   <div class="mstat-grid" id="mstats"></div>
   <div id="upg-options"></div>
-  <button class="btn-sell" onclick="sellSelected()">Sell (50% value)</button>
+  <div style="display:flex;gap:5px;margin-top:6px">
+    <button class="ctrl-btn" style="flex:1;font-size:10px" onclick="openEditFromPanel()">✏ Edit / Move / Remove</button>
+  </div>
 </div>
 
 <!-- CASHIER PANEL -->
@@ -175,8 +179,13 @@
 <div id="mgmt-panel" class="panel">
   <button class="panel-close" onclick="closeManagementWindow()">X</button>
   <h2>Casino Management</h2>
-  <div style="display:flex;gap:6px;margin-bottom:8px">
-    <button class="ctrl-btn" onclick="openSurveillancePanel();closeManagementWindow()">Open Surveillance</button>
+  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+    <button class="ctrl-btn" onclick="openSurveillancePanel();closeManagementWindow()">Surveillance</button>
+    <button class="ctrl-btn" onclick="openCashierPanel();closeManagementWindow()">Cashier</button>
+    <button class="ctrl-btn" onclick="openMinigame();closeManagementWindow()">Play Slots</button>
+    <button class="ctrl-btn" id="expand-btn" onclick="expandFloor();closeManagementWindow()" style="display:none">Expand Floor</button>
+    <button class="ctrl-btn" onclick="saveGame()">Save</button>
+    <span id="save-lbl2" style="font-size:9px;color:rgba(201,168,76,.3);align-self:center">auto-saves</span>
   </div>
   <div id="mgmt-contacts"></div>
 </div>
