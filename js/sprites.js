@@ -396,6 +396,40 @@ function drawTableSprite(m,def,x,y,w,h) {
 
 // ── Machine overlays (not rotated) ─────────
 function drawMachineOverlays(m,def,sp,pw,ph) {
+  // ── Broken overlay ──
+  if(m.broken) {
+    const t = Date.now()/400;
+    const a = 0.35 + 0.3*Math.abs(Math.sin(t));
+    ctx.fillStyle = `rgba(220,60,30,${a})`;
+    ctx.fillRect(sp.x, sp.y, pw*TILE, ph*TILE);
+    // Wrench icon
+    ctx.font = `${Math.floor(Math.min(pw,ph)*TILE*0.45)}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.9;
+    ctx.fillText('🔧', sp.x+pw*TILE/2, sp.y+ph*TILE/2);
+    ctx.globalAlpha = 1;
+    // "TAP TO FIX" label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('TAP TO FIX', sp.x+pw*TILE/2, sp.y+ph*TILE+2);
+    return; // skip other overlays when broken
+  }
+
+  // ── Health bar (only when below 70%) ──
+  if(def.isSlot && def.degradePerSpin) {
+    const health = m.health ?? 100;
+    if(health < 70) {
+      const bw = pw*TILE - 8;
+      const bx = sp.x + 4, by = sp.y + ph*TILE - 7;
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      ctx.fillRect(bx, by, bw, 4);
+      const col = health > 40 ? '#e0c040' : '#e04040';
+      ctx.fillStyle = col;
+      ctx.fillRect(bx, by, bw*(health/100), 4);
+    }
+  }
+
   // Upgrade stars
   const stars=(m.upgrades?.speed||0)+(m.upgrades?.luck||0)+(m.upgrades?.bet||0);
   if(stars>0) {
@@ -421,6 +455,19 @@ function drawPatron(p) {
   const sp=w2s(p.wx,p.wy);
   const x=sp.x, y=sp.y, r=10;
 
+  // Delivery highlight ring (drawn first, behind patron)
+  if(typeof _highlightPid !== 'undefined' && _highlightPid === p.id) {
+    const pulse = 0.5 + 0.5*Math.sin(Date.now()*0.008);
+    ctx.strokeStyle = `rgba(80,220,120,${0.6+pulse*0.4})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y-4, 16+pulse*3, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = `rgba(80,220,120,${0.1+pulse*0.08})`;
+    ctx.beginPath(); ctx.arc(x, y-4, 16+pulse*3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#50e078'; ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('DELIVER', x, y-24);
+  }
+
   // Shadow
   ctx.fillStyle='rgba(0,0,0,.25)';
   ctx.beginPath(); ctx.ellipse(x,y+r+1,r*.8,2.5,0,0,Math.PI*2); ctx.fill();
@@ -444,6 +491,12 @@ function drawPatron(p) {
   ctx.fillRect(x-2,y-7,2,2);
   ctx.fillRect(x+1,y-7,2,2);
 
+  // High roller crown 👑
+  if(p.isHighRoller) {
+    ctx.font='9px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('👑',x,y-10);
+  }
+
   // State indicators
   const em=p.state==='PLAYING'?'🎰'
           :p.state==='WAITING_CASHIER'||p.state==='WALKING_TO_CASHIER'?'💵'
@@ -452,12 +505,13 @@ function drawPatron(p) {
           :p.state==='EATING'?'🍽'
           :p.state==='LEAVING'?'🚶'
           :p.state==='WAITING_JACKPOT'?'🏆'
+          :p.state==='WANDERING'?'🔍'
           :p.state==='WAITING_MACHINE'?'⏳'
           :p.state==='IDLE_AT_TABLE'?'🃏':null;
 
   if(em) {
     ctx.font='9px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-    ctx.fillText(em,x,y-11);
+    ctx.fillText(em,x,y-(p.isHighRoller?20:11));
   }
 
   // Mood dot (tiny coloured pixel top-right of head)
@@ -465,15 +519,31 @@ function drawPatron(p) {
   ctx.fillStyle=mood>66?'#50e050':mood>33?'#e0c040':'#e04040';
   ctx.fillRect(x+5,y-12,3,3);
 
+  // Eating progress bar
+  if(p.state==='EATING' && p.eatTimer!=null) {
+    const EAT_TOTAL = 4000;
+    const pct = Math.max(0, Math.min(1, p.eatTimer / EAT_TOTAL));
+    const bw = 22, bh = 4;
+    const bx = x - bw/2, by = y + 14;
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    ctx.fillRect(bx-1, by-1, bw+2, bh+2);
+    ctx.fillStyle = '#e07030';
+    ctx.fillRect(bx, by, bw * pct, bh);
+    ctx.font = '6px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillStyle='rgba(255,255,255,.7)';
+    ctx.fillText('🍽', x, by+bh+1);
+  }
+
   // Ticket value
   if(p.ticketValue>0&&p.state!=='PLAYING') {
-    ctx.fillStyle='#8ad070'; ctx.font='bold 7px monospace';
+    ctx.fillStyle=p.isHighRoller?'#f0d060':'#8ad070';
+    ctx.font=`bold ${p.isHighRoller?8:7}px monospace`;
     ctx.textAlign='center'; ctx.textBaseline='bottom';
     ctx.fillText('$'+p.ticketValue.toFixed(2),x,y-21);
   }
 
   // Name
-  ctx.fillStyle='rgba(255,255,255,.45)';
+  ctx.fillStyle=p.isHighRoller?'rgba(240,210,80,.7)':'rgba(255,255,255,.45)';
   ctx.font='6px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
   ctx.fillText(p.name,x,y+r+3);
 }

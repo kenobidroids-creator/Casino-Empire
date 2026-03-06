@@ -7,15 +7,13 @@ function updateCashierAlert() {
   const waiting = G.cashierQueue.length;
   if(waiting > 0 && !open) {
     const cashier = G.machines.find(m=>m.type==='cashier');
-    notif(
-      waiting===1 ? 'Patron waiting at cashier' : `${waiting} patrons at cashier`,
-      '',
-      () => { openCashierPanel(); centerOnMachine(cashier); },
-      '💵'
-    );
+    const msg = waiting===1 ? '1 patron at cashier' : `${waiting} patrons at cashier`;
+    persistNotif('cashier-queue', msg, '💵', () => {
+      openCashierPanel();
+      if(cashier) centerOnMachine(cashier);
+    });
   } else {
-    dismissNotif('Patron waiting at cashier');
-    for(let i=2;i<=10;i++) dismissNotif(`${i} patrons at cashier`);
+    clearPersistNotif('cashier-queue');
   }
 }
 
@@ -123,10 +121,42 @@ function autoPay() {
 }
 
 function finalizePayment() {
-  G.cashierServing.state='PAID';
+  if(G.cashierServing) G.cashierServing.state='PAID';
   G.cashierQueue.shift();
-  G.cashierServing=null; G.payTray=[];
-  closeCashierPanel();
+  G.cashierServing=null;
+  G.payTray=[];
+
+  // Slide remaining queue members forward visually
+  _refreshCashierQueuePositions();
+
+  // If more patrons waiting, serve next one immediately without closing
+  if(G.cashierQueue.length > 0) {
+    // Flush stale entries
+    while(G.cashierQueue.length > 0) {
+      const p = G.patrons.find(p=>p.id===G.cashierQueue[0]);
+      if(p) { G.cashierServing = p; break; }
+      G.cashierQueue.shift();
+    }
+    if(G.cashierServing) {
+      const tw = document.getElementById('till-wrap');
+      if(tw) tw.style.display='block';
+      document.getElementById('cpat-name').textContent=G.cashierServing.name+"'s Ticket";
+      document.getElementById('ctick').textContent='$'+G.cashierServing.ticketValue.toFixed(2);
+      buildTill(); renderTray();
+      document.getElementById('queue-info').textContent=
+        G.cashierQueue.length>1?(G.cashierQueue.length-1)+' more waiting':'Last patron';
+      return; // keep panel open
+    }
+  }
+
+  // No more patrons — show idle state, don't close
+  document.getElementById('cpat-name').textContent='No patrons waiting';
+  document.getElementById('ctick').textContent='$0.00';
+  const tw = document.getElementById('till-wrap');
+  if(tw) tw.style.display='none';
+  document.getElementById('pay-area').innerHTML='<span class="pay-placeholder">Queue is clear</span>';
+  document.getElementById('pay-total').textContent='';
+  document.getElementById('queue-info').textContent='Cashier is idle';
   updateCashierAlert();
 }
 

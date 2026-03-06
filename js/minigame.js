@@ -168,3 +168,186 @@ function renderMgReels() {
   mc.strokeStyle='rgba(255,200,0,.55)'; mc.lineWidth=2;
   mc.beginPath(); mc.moveTo(0,H/2); mc.lineTo(W,H/2); mc.stroke();
 }
+
+// ═══════════════════════════════════════════
+//  Machine Repair Minigame
+// ═══════════════════════════════════════════
+
+let _repairMid = null;
+let _repairHits = 0;
+let _repairTotal = 0;
+let _repairSparkTimers = [];
+
+function openRepairPanel(mid) {
+  const m = G.machines.find(m => m.id === mid);
+  if(!m || !m.broken) return;
+  const def = MACHINE_DEFS[m.type];
+
+  _repairMid = mid;
+  _repairHits = 0;
+  // Difficulty scales with tier: tier1=8 hits, tier4=16 hits
+  _repairTotal = 6 + (def.tier || 1) * 2;
+
+  document.getElementById('repair-machine-name').textContent = def.icon + ' ' + def.name;
+  document.getElementById('repair-cost-row').textContent =
+    `Auto-fix cost: $${def.repairCost || 100}`;
+  document.getElementById('repair-pay-btn').textContent =
+    `💳 Pay $${def.repairCost || 100} to Auto-Fix`;
+  document.getElementById('repair-progress-bar').style.width = '0%';
+  document.getElementById('repair-progress-bar').style.background =
+    'linear-gradient(to right,#e07050,#f0c840)';
+  document.getElementById('repair-panel').style.display = 'block';
+
+  _buildRepairGrid();
+}
+
+function _buildRepairGrid() {
+  const grid = document.getElementById('repair-grid');
+  grid.innerHTML = '';
+  _repairSparkTimers.forEach(t => clearTimeout(t));
+  _repairSparkTimers = [];
+
+  const cells = 20;
+  const sparkCount = 5;
+  const sparkIndices = new Set();
+  while(sparkIndices.size < sparkCount) {
+    sparkIndices.add(Math.floor(Math.random() * cells));
+  }
+
+  for(let i = 0; i < cells; i++) {
+    const btn = document.createElement('button');
+    btn.style.cssText = `height:44px;border-radius:6px;font-size:18px;cursor:pointer;
+      background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);transition:all .12s;`;
+    if(sparkIndices.has(i)) {
+      _makeSpark(btn);
+    } else {
+      btn.textContent = '🔩';
+      btn.addEventListener('click', () => _missClick(btn));
+    }
+    grid.appendChild(btn);
+  }
+}
+
+function _makeSpark(btn) {
+  btn.textContent = '⚡';
+  btn.dataset.spark = '1';
+  btn.style.background = 'rgba(240,200,40,.15)';
+  btn.style.borderColor = 'rgba(240,200,40,.5)';
+  btn.style.transform = 'scale(1.15)';
+  setTimeout(() => { btn.style.transform = ''; }, 180);
+  // Remove old listener, add fresh one
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode && btn.parentNode.replaceChild(newBtn, btn);
+  btn = newBtn;
+  // Spark expires after 3s if not clicked — relocates to another cell
+  const expireMs = 2500 + Math.random() * 1500;
+  const t = setTimeout(() => _sparkExpire(newBtn), expireMs);
+  _repairSparkTimers.push(t);
+  newBtn.addEventListener('click', () => _hitSpark(newBtn));
+}
+
+function _sparkExpire(btn) {
+  if(!btn.isConnected || btn.dataset.spark !== '1') return;
+  // Spark fizzles — turn back to bolt briefly, then relocate
+  btn.textContent = '💨';
+  btn.dataset.spark = '';
+  btn.style.background = 'rgba(180,100,40,.1)';
+  btn.style.borderColor = 'rgba(180,100,40,.3)';
+  setTimeout(() => {
+    btn.textContent = '🔩';
+    btn.style.background = 'rgba(255,255,255,.05)';
+    btn.style.borderColor = 'rgba(255,255,255,.1)';
+    // Light up a new random empty cell
+    if(_repairMid) _addNewSparks(1);
+  }, 400);
+}
+
+function _hitSpark(btn) {
+  if(!_repairMid || btn.dataset.spark !== '1') return;
+  btn.dataset.spark = '';
+  btn.textContent = '✅';
+  btn.style.background = 'rgba(80,220,80,.18)';
+  btn.style.borderColor = 'rgba(80,220,80,.5)';
+  btn.style.transform = 'scale(1.2)';
+  setTimeout(() => { btn.style.transform = ''; }, 180);
+  btn.disabled = true;
+
+  _repairHits++;
+  const pct = (_repairHits / _repairTotal) * 100;
+  document.getElementById('repair-progress-bar').style.width = pct + '%';
+
+  if(_repairHits >= _repairTotal) {
+    setTimeout(() => _completeRepair(), 400);
+    return;
+  }
+
+  // Delay, then add a new spark if none remain
+  const t = setTimeout(() => {
+    const remaining = document.getElementById('repair-grid')
+      .querySelectorAll('[data-spark="1"]').length;
+    if(remaining === 0) _addNewSparks(2);
+  }, 300);
+  _repairSparkTimers.push(t);
+}
+
+function _addNewSparks(count = 2) {
+  const grid = document.getElementById('repair-grid');
+  if(!grid) return;
+  const empty = [...grid.children].filter(b => !b.disabled && b.dataset.spark !== '1' && b.textContent !== '💨');
+  const toLight = Math.min(count, empty.length);
+  for(let i = 0; i < toLight; i++) {
+    const idx = Math.floor(Math.random() * empty.length);
+    const btn = empty.splice(idx, 1)[0];
+    _makeSpark(btn);
+  }
+}
+
+function _missClick(btn) {
+  btn.style.background = 'rgba(220,80,60,.2)';
+  btn.style.borderColor = 'rgba(220,80,60,.5)';
+  setTimeout(() => {
+    btn.style.background = 'rgba(255,255,255,.05)';
+    btn.style.borderColor = 'rgba(255,255,255,.1)';
+  }, 300);
+}
+
+function _completeRepair() {
+  _repairSparkTimers.forEach(t => clearTimeout(t));
+  const m = G.machines.find(m => m.id === _repairMid);
+  if(m) {
+    m.broken = false;
+    m.health = 60; // restored at 60%
+    spawnFloat(
+      tile2world(m.tx, m.ty).x + TILE/2,
+      tile2world(m.tx, m.ty).y,
+      '✅ Fixed!', '#7aba70'
+    );
+    toast('Machine repaired! ✅', 'g');
+  }
+  closeRepairPanel();
+}
+
+function repairPayAndFix() {
+  const m = G.machines.find(m => m.id === _repairMid);
+  if(!m) return;
+  const def = MACHINE_DEFS[m.type];
+  const cost = def.repairCost || 100;
+  if(G.money < cost) { toast('Not enough money! Need $'+cost,'r'); return; }
+  G.money -= cost;
+  m.broken = false;
+  m.health = 80; // paid repair restores to 80%
+  spawnFloat(
+    tile2world(m.tx, m.ty).x + TILE/2,
+    tile2world(m.tx, m.ty).y,
+    '✅ Repaired! -$'+cost, '#f0c840'
+  );
+  toast('Machine repaired for $'+cost,'g');
+  closeRepairPanel();
+}
+
+function closeRepairPanel() {
+  _repairSparkTimers.forEach(t => clearTimeout(t));
+  _repairSparkTimers = [];
+  _repairMid = null;
+  document.getElementById('repair-panel').style.display = 'none';
+}

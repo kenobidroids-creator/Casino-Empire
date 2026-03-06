@@ -110,6 +110,13 @@ function openUpgradePanel(mid) {
 
   if(def.isSlot) {
     const bl=m.upgrades.bet||0, ll=m.upgrades.luck||0;
+    const health = Math.round(m.health ?? 100);
+    const healthCol = health > 60 ? '#7aba70' : health > 30 ? '#e0c040' : '#e04040';
+    const brokenRow = m.broken
+      ? `<div class="mstat-box" style="grid-column:span 2;background:rgba(220,60,30,.12);border:1px solid rgba(220,60,30,.3)">
+           <div class="mstat-lbl" style="color:#e07070">STATUS</div>
+           <div class="mstat-val" style="color:#e07070">⚠️ BROKEN — <button class="mgmt-btn-pay" style="margin-left:6px;font-size:10px;padding:2px 8px" onclick="openRepairPanel(${m.id})">🔧 Repair</button></div>
+         </div>` : '';
     sg.innerHTML=`
       <div class="mstat-box"><div class="mstat-lbl">Bet Range</div>
         <div class="mstat-val">$${(def.betMin*(1+bl*.25)).toFixed(2)}–$${(def.betMax*(1+bl*.25)).toFixed(2)}</div></div>
@@ -119,6 +126,14 @@ function openUpgradePanel(mid) {
         <div class="mstat-val">$${(m.totalEarned||0).toFixed(2)}</div></div>
       <div class="mstat-box"><div class="mstat-lbl">Facing</div>
         <div class="mstat-val">${rotLabel}</div></div>
+      <div class="mstat-box" style="grid-column:span 2">
+        <div class="mstat-lbl">Machine Health</div>
+        <div style="background:rgba(255,255,255,.08);border-radius:3px;height:6px;margin-top:4px;overflow:hidden">
+          <div style="height:100%;width:${health}%;background:${healthCol};border-radius:3px;transition:width .3s"></div>
+        </div>
+        <div style="font-size:9px;color:${healthCol};margin-top:2px">${health}% ${health<30?'— Breakdown imminent!':health<60?'— Needs attention':'— OK'}</div>
+      </div>
+      ${brokenRow}
       <div class="mstat-box" style="grid-column:span 2">
         <div class="mstat-lbl">Live Reels</div>
         <canvas id="upg-reel-canvas" width="220" height="50" style="width:100%;border-radius:4px;margin-top:3px;image-rendering:pixelated"></canvas>

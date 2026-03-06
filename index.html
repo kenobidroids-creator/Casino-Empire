@@ -114,6 +114,35 @@
   <div class="queue-info" id="queue-info"></div>
 </div>
 
+<!-- BAR PANEL -->
+<div id="bar-panel" class="panel" style="display:none;width:min(380px,96vw)">
+  <button class="panel-close" onclick="closeBarPanel()">✕</button>
+  <h2 id="bar-panel-title">🍺 Bar</h2>
+  <div id="bar-orders-list" style="max-height:min(55vh,420px);overflow-y:auto"></div>
+  <div id="bar-empty-msg" style="color:var(--text-muted);text-align:center;padding:18px 0;font-size:var(--fs-sm);display:none">
+    No orders right now.<br><small>Patrons will order when they arrive.</small>
+  </div>
+</div>
+
+<!-- REPAIR PANEL -->
+<div id="repair-panel" class="panel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(340px,94vw);z-index:300">
+  <button class="panel-close" onclick="closeRepairPanel()">✕</button>
+  <div class="panel-title">🔧 Machine Repair</div>
+  <div style="text-align:center;margin-bottom:8px">
+    <span id="repair-machine-name" style="color:var(--gold-light);font-weight:700;font-size:var(--fs-lg)"></span>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Click all <strong style="color:#f0c840">⚡ sparks</strong> to fix it yourself, or pay to auto-fix</div>
+  </div>
+  <div id="repair-cost-row" style="text-align:center;font-size:11px;color:#e09050;margin-bottom:8px"></div>
+  <div id="repair-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0 10px"></div>
+  <div style="background:rgba(255,255,255,.08);border-radius:4px;height:8px;overflow:hidden;margin-bottom:12px">
+    <div id="repair-progress-bar" style="height:100%;width:0%;background:linear-gradient(to right,#e07050,#f0c840);transition:width .2s;border-radius:4px"></div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="mgmt-btn-pay" onclick="repairPayAndFix()" id="repair-pay-btn" style="flex:1">💳 Pay &amp; Auto-Fix</button>
+    <button class="mgmt-btn-call" onclick="closeRepairPanel()" style="flex:0.4">Cancel</button>
+  </div>
+</div>
+
 <!-- JACKPOT PANEL -->
 <div id="jp-panel" class="panel">
   <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">X</button>
@@ -146,6 +175,10 @@
     <div class="ded-row">
       <span class="ded-label">Staff wages</span>
       <span class="ded-val" id="ded-wages">$0.00</span>
+    </div>
+    <div class="ded-row" id="ded-loan-row" style="display:none">
+      <span class="ded-label">Loan repayment</span>
+      <span class="ded-val" id="ded-loan" style="color:#e07070">$0.00</span>
     </div>
     <div class="ded-row">
       <span class="ded-label">Tips earned</span>
@@ -275,6 +308,7 @@
 <script src="js/render.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/patrons.js"></script>
+<script src="js/parking.js"></script>
 <script src="js/employees.js"></script>
 <script src="js/machines.js"></script>
 <script src="js/cashier.js"></script>

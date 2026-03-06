@@ -13,31 +13,36 @@ function spawnPatron() {
   });
   if(!hasMachines) return;
 
+  const isHighRoller = Math.random() < 0.10; // 10% chance
   const wp=tile2world(ENT_TX(),ENT_TY());
   const p={
     id:G.nextPid++,
     name:PATRON_NAMES[Math.floor(Math.random()*PATRON_NAMES.length)],
-    color:PATRON_COLORS[Math.floor(Math.random()*PATRON_COLORS.length)],
+    color: isHighRoller ? '#d4a820' : PATRON_COLORS[Math.floor(Math.random()*PATRON_COLORS.length)],
     hairColor:HAIR_COLORS[Math.floor(Math.random()*HAIR_COLORS.length)],
     wx:wp.x+TILE/2, wy:wp.y+TILE/2+TILE*1.3,
     state:'ENTERING',
     targetX:wp.x+TILE/2, targetY:wp.y+TILE/2,
     speed:50+Math.random()*40,
     machineId:null, ticketValue:0, ticketPaid:false,
-    budget:8+Math.random()*22,
+    // High rollers have 5–15× normal budget
+    budget: isHighRoller
+      ? 150 + Math.random()*350
+      : 25  + Math.random()*55,
+    isHighRoller,
     playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
     wantsFood:Math.random()<.30,
     foodState:null, eatTimer:0,
     _kioskTimer:0, _barId:null,
     visited:true,
-    // Tracking for AI thoughts
     _spentTotal:0, _wonTotal:0,
-    _machineVisits:{},   // {type: count}
+    _machineVisits:{},
     _favMachine:null,
-    _mood:100,           // 0–100, affects thought
-    _waitTimer:0,        // used when waiting for a machine
-    _waitMax:0,          // patience before giving up
-    _thought:null        // last computed thought string
+    _mood:100,
+    _waitTimer:0,
+    _waitMax:0,
+    _thought:null,
+    _wanderTimer:0,
   };
   G.dayStats.patronsVisited++;
   G.patrons.push(p);
@@ -52,28 +57,54 @@ function updatePatron(p,dt) {
     case 'WALKING_TO_BAR':
     case 'WALKING_TO_TABLE':
     case 'LEAVING':
+    case 'WANDERING':
       movePatron(p,dt); break;
     case 'PLAYING':
       updatePlaying(p,dt); break;
     case 'WAITING_CASHIER':
+      // Patience: leave after ~90 real-seconds if nobody serves them
+      if(!p._cashierWait) p._cashierWait = 90000;
+      p._cashierWait -= dt;
+      if(p._cashierWait <= 0) {
+        G.cashierQueue = G.cashierQueue.filter(id=>id!==p.id);
+        _refreshCashierQueuePositions();
+        updateCashierAlert();
+        p._cashierWait = null;
+        spawnFloat(p.wx, p.wy-18, '😤 Gave up!', '#e07070');
+        kickOut(p);
+      }
+      break;
     case 'WAITING_AT_BAR':
     case 'WAITING_JACKPOT':
     case 'IDLE_AT_TABLE':
       break; // idle
-    case 'WAITING_MACHINE':
-      // Idle near entrance waiting for a slot to free up
+    case 'WANDERING':
+      movePatron(p,dt); // walk to wander target
+      p._mood = Math.max(0, p._mood - dt*0.002);
       p._waitTimer -= dt;
-      p._mood = Math.max(0, p._mood - dt*0.003); // slowly get grumpy
       if(p._waitTimer <= 0) {
-        p._mood = Math.max(0, p._mood-20);
+        // Patience expired — leave frustrated
+        p._mood = Math.max(0, p._mood - 20);
         p._thought = pickThought(p,'frustrated');
         kickOut(p);
-      } else {
-        // Re-check every 2 seconds
-        if(!p._retryAcc) p._retryAcc=0;
-        p._retryAcc+=dt;
-        if(p._retryAcc>=2000) { p._retryAcc=0; assignMachine(p); }
+        break;
       }
+      // Retry assignment every 3 seconds
+      if(!p._retryAcc) p._retryAcc = 0;
+      p._retryAcc += dt;
+      if(p._retryAcc >= 3000) {
+        p._retryAcc = 0;
+        assignMachine(p);
+        if(p.state !== 'WANDERING') break; // got assigned, stop wandering
+      }
+      // Pick a new random wander target when we arrive
+      if(Math.hypot(p.wx-p.targetX, p.wy-p.targetY) < 8) {
+        _pickWanderTarget(p);
+      }
+      break;
+    case 'WAITING_MACHINE': // legacy compat
+      p.state = 'WANDERING';
+      _pickWanderTarget(p);
       break;
     case 'WAITING_KIOSK':
       p._kioskTimer-=dt;
@@ -131,71 +162,87 @@ function updatePlaying(p,dt) {
 }
 
 function assignMachine(p) {
-  const slots=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot);
-  const freeSlots=slots.filter(m=>m.occupied==null);
-  const tables=G.machines.filter(m=>MACHINE_DEFS[m.type].isTable&&MACHINE_DEFS[m.type].tableGame);
-  const bands=G.machines.filter(m=>MACHINE_DEFS[m.type].isBand);
-  const sports=G.machines.filter(m=>MACHINE_DEFS[m.type].isSportsbook);
+  const slots      = G.machines.filter(m => MACHINE_DEFS[m.type].isSlot);
+  const freeSlots  = slots.filter(m => m.occupied == null && !m.broken);
+  const tables     = G.machines.filter(m => MACHINE_DEFS[m.type].isTable && MACHINE_DEFS[m.type].tableGame);
+  const bands      = G.machines.filter(m => MACHINE_DEFS[m.type].isBand);
+  const sports     = G.machines.filter(m => MACHINE_DEFS[m.type].isSportsbook);
+  const allEntertainment = [...tables, ...bands, ...sports];
 
-  const r=Math.random();
-  let candidates=[];
-  if(r<0.65&&slots.length)          candidates=freeSlots;   // prefer free slots
-  else if(r<0.85&&tables.length)    candidates=tables;
-  else if(r<0.92&&(bands.length||sports.length)) candidates=[...bands,...sports];
-  else if(freeSlots.length)         candidates=freeSlots;   // fallback
+  const r = Math.random();
+  let candidates = [];
 
-  // All slots occupied — wait with patience instead of leaving immediately
-  if(!candidates.length) {
-    if(slots.length>0 && !tables.length && !bands.length && !sports.length) {
-      // Only slots exist but all full — wait near entrance
-      p.state='WAITING_MACHINE';
-      p._waitMax = 12000 + Math.random()*8000;
-      p._waitTimer = p._waitMax;
-      p._mood = Math.max(50, p._mood-10);
-      p._thought = pickThought(p,'full');
+  if (r < 0.65 && slots.length) {
+    // Wants a slot
+    if (freeSlots.length > 0) {
+      candidates = freeSlots;
+    } else if (allEntertainment.length > 0) {
+      // All slots full — try entertainment as fallback instead of leaving
+      candidates = allEntertainment;
+    } else {
+      // Nothing free at all — wander and keep checking
+      p.state = 'WANDERING';
+      p._waitTimer = 20000 + Math.random() * 15000;
+      p._retryAcc = 0;
+      p._mood = Math.max(50, p._mood - 8);
+      p._thought = pickThought(p, 'full');
+      _pickWanderTarget(p);
       return;
     }
-    kickOut(p); return;
+  } else if (r < 0.85 && tables.length) {
+    candidates = tables;
+  } else if (r < 0.92 && allEntertainment.length) {
+    candidates = allEntertainment;
+  } else if (freeSlots.length) {
+    candidates = freeSlots;
+  } else if (allEntertainment.length) {
+    candidates = allEntertainment;
   }
 
-  // If we wanted a slot but only occupied ones exist, wait instead
-  if(r<0.65 && freeSlots.length===0 && slots.length>0) {
-    p.state='WAITING_MACHINE';
-    p._waitMax = 10000 + Math.random()*8000;
-    p._waitTimer = p._waitMax;
-    p._mood = Math.max(50, p._mood-8);
-    p._thought = pickThought(p,'full');
+  // Still nothing? Wander if any machine exists, otherwise kick out
+  if (!candidates.length) {
+    if (slots.length > 0 || allEntertainment.length > 0) {
+      p.state = 'WANDERING';
+      p._waitTimer = 16000 + Math.random() * 10000;
+      p._retryAcc = 0;
+      p._thought = pickThought(p, 'full');
+      _pickWanderTarget(p);
+    } else {
+      kickOut(p);
+    }
     return;
   }
 
-  let best=null,bestDist=Infinity;
-  for(const m of candidates) {
-    if(MACHINE_DEFS[m.type].isSlot&&m.occupied!=null) continue;
-    const wp=tile2world(m.tx,m.ty);
-    const dx=wp.x+TILE/2-p.wx, dy=wp.y+TILE/2-p.wy;
-    const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<bestDist){best=m;bestDist=d;}
+  // Find closest valid candidate
+  let best = null, bestDist = Infinity;
+  for (const m of candidates) {
+    if (MACHINE_DEFS[m.type].isSlot && m.occupied != null) continue;
+    const wp = tile2world(m.tx, m.ty);
+    const dx = wp.x + TILE/2 - p.wx, dy = wp.y + TILE/2 - p.wy;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < bestDist) { best = m; bestDist = d; }
   }
-  if(!best){
-    // No valid target found — wait if slots exist
-    if(slots.length>0) {
-      p.state='WAITING_MACHINE'; p._waitTimer=8000; p._waitMax=8000;
-      p._thought=pickThought(p,'full');
-    } else { kickOut(p); }
+
+  if (!best) {
+    // Candidates exist but all occupied — wander
+    p.state = 'WANDERING';
+    p._waitTimer = 14000 + Math.random() * 8000;
+    p._retryAcc = 0;
+    p._thought = pickThought(p, 'full');
+    _pickWanderTarget(p);
     return;
   }
 
-  const def=MACHINE_DEFS[best.type];
-  if(def.isSlot) {
-    best.occupied=p.id;
-    p.machineId=best.id;
-    p.state='WALKING_TO_MACHINE';
-    const fp=getMachineFrontPos(best);
-    p.targetX=fp.wx; p.targetY=fp.wy;
-    // Track favourite machine type
-    p._machineVisits[best.type]=(p._machineVisits[best.type]||0)+1;
-    const fav=Object.entries(p._machineVisits).sort((a,b)=>b[1]-a[1])[0];
-    if(fav) p._favMachine=fav[0];
+  const def = MACHINE_DEFS[best.type];
+  if (def.isSlot) {
+    best.occupied = p.id;
+    p.machineId = best.id;
+    p.state = 'WALKING_TO_MACHINE';
+    const fp = getMachineFrontPos(best);
+    p.targetX = fp.wx; p.targetY = fp.wy;
+    p._machineVisits[best.type] = (p._machineVisits[best.type] || 0) + 1;
+    const fav = Object.entries(p._machineVisits).sort((a,b) => b[1]-a[1])[0];
+    if (fav) p._favMachine = fav[0];
   } else if(def.isTable&&def.tableGame) {
     const ts=TABLE_STATES[best.id];
     const totalSeats=def.seats||4;
@@ -205,8 +252,9 @@ function assignMachine(p) {
       (p2.state==='WALKING_TO_TABLE'||p2.state==='IDLE_AT_TABLE')
     ).length;
     if(alreadyHere>=totalSeats){
-      p.state='WAITING_MACHINE'; p._waitTimer=6000; p._waitMax=6000;
+      p.state='WANDERING'; p._waitTimer=14000; p._retryAcc=0;
       p._thought=pickThought(p,'full');
+      _pickWanderTarget(p);
       return;
     }
     const nextSeat=seatsTaken+alreadyHere;
@@ -232,6 +280,60 @@ function assignMachine(p) {
 
 
 
+function _positionInCashierQueue(p) {
+  const cashier = G.machines.find(m=>m.type==='cashier');
+  if(!cashier) return;
+  const fp = getMachineFrontPos(cashier);
+  const qIdx = G.cashierQueue.indexOf(p.id);
+  const rot = cashier.rotation||0;
+  // Queue stretches away from the machine face
+  const queueDir = [
+    {dx:0, dy:1},   // rot 0: queue goes further south
+    {dx:-1,dy:0},   // rot 1: queue goes further west
+    {dx:0, dy:-1},  // rot 2: queue goes further north
+    {dx:1, dy:0},   // rot 3: queue goes further east
+  ][rot];
+  const spacing = TILE * 0.9;
+  p.wx = fp.wx + queueDir.dx * spacing * qIdx;
+  p.wy = fp.wy + queueDir.dy * spacing * qIdx;
+  p.targetX = p.wx;
+  p.targetY = p.wy;
+}
+
+function _refreshCashierQueuePositions() {
+  // After someone is paid and leaves, slide everyone forward
+  const cashier = G.machines.find(m=>m.type==='cashier');
+  if(!cashier) return;
+  for(const pid of G.cashierQueue) {
+    const p = G.patrons.find(x=>x.id===pid);
+    if(p) _positionInCashierQueue(p);
+  }
+}
+
+
+function _pickWanderTarget(p) {
+  // Pick a random walkable tile on the floor
+  const tries = 8;
+  for(let i=0;i<tries;i++){
+    const tx = Math.floor(Math.random()*G.floorW);
+    const ty = Math.floor(Math.random()*G.floorH);
+    if(!validTile(tx,ty)) continue;
+    // Don't walk into a machine tile
+    if(G.machines.some(m=>{
+      const def=MACHINE_DEFS[m.type]; const r=m.rotation||0;
+      const pw=r%2===0?def.w:def.h,ph=r%2===0?def.h:def.w;
+      return tx>=m.tx&&tx<m.tx+pw&&ty>=m.ty&&ty<m.ty+ph;
+    })) continue;
+    const wp=tile2world(tx,ty);
+    p.targetX=wp.x+TILE/2; p.targetY=wp.y+TILE/2;
+    return;
+  }
+  // Fallback — wander near entrance
+  const wp=tile2world(ENT_TX(),ENT_TY());
+  p.targetX=wp.x+TILE/2+(Math.random()*3-1.5)*TILE;
+  p.targetY=wp.y-TILE;
+}
+
 function getMachineFrontPos(m) {
   const def=MACHINE_DEFS[m.type];
   const rot=m.rotation||0;
@@ -240,6 +342,23 @@ function getMachineFrontPos(m) {
   const ph=rot%2===0?def.h:def.w;
   const wp=tile2world(m.tx,m.ty);
   return { wx:wp.x+(pw/2+off.dx)*TILE, wy:wp.y+(ph/2+off.dy)*TILE };
+}
+
+function getMachineBackPos(m) {
+  // Staff stand on the back side — opposite the patron-facing direction,
+  // tucked inside/behind the machine sprite so patrons have the front clear.
+  const def=MACHINE_DEFS[m.type];
+  const rot=m.rotation||0;
+  const off=getPatronOffset(rot);
+  const pw=rot%2===0?def.w:def.h;
+  const ph=rot%2===0?def.h:def.w;
+  const wp=tile2world(m.tx,m.ty);
+  // Negate the patron offset so staff stand behind, then pull in by 0.3 tiles
+  // so they're visually tucked behind the machine layer
+  return {
+    wx: wp.x + (pw/2 - off.dx * 0.9) * TILE,
+    wy: wp.y + (ph/2 - off.dy * 0.9) * TILE,
+  };
 }
 
 function startPlaying(p) {
@@ -263,8 +382,27 @@ function doSpin(p) {
   const m=G.machines.find(m=>m.id===p.machineId);
   if(!m) return;
   const def=MACHINE_DEFS[m.type];
+  // Degrade machine health
+  if(def.degradePerSpin) {
+    const speedBonus = (m.upgrades.speed||0) * 0.15; // upgrades slow degradation
+    const degrade = def.degradePerSpin * (1 - speedBonus);
+    m.health = Math.max(0, (m.health ?? 100) - degrade);
+    if(m.health <= 0 && !m.broken) {
+      m.broken = true;
+      m.occupied = null;
+      p.machineId = null;
+      p.spinsLeft = 0;
+      spawnFloat(p.wx, p.wy-22, '⚠️ Machine broke!', '#e09040');
+      const _mId = m.id;
+      notif('🔧 '+def.name+' broke down!', 'r',
+        () => { centerOnMachine(m); openRepairPanel(_mId); }, '🔧');
+      return;
+    }
+  }
+
   const betMult=1+(m.upgrades.bet||0)*.25;
-  const bet=parseFloat(((def.betMin+Math.random()*(def.betMax-def.betMin))*betMult).toFixed(2));
+  const hrMult = p.isHighRoller ? (3+Math.random()*5) : 1;
+  const bet=parseFloat(((def.betMin+Math.random()*(def.betMax-def.betMin))*betMult*hrMult).toFixed(2));
   if(p.budget<bet){p.spinsLeft=0;return;}
   p.budget-=bet;
   p._spentTotal=(p._spentTotal||0)+bet;
@@ -353,14 +491,14 @@ function routeToPayment(p) {
   const cashier=G.machines.find(m=>m.type==='cashier');
   if(kiosk&&(!cashier||Math.random()<.55)) {
     p.state='WALKING_TO_KIOSK';
-    const wp=tile2world(kiosk.tx,kiosk.ty);
-    p.targetX=wp.x+TILE/2; p.targetY=wp.y+TILE+8;
+    const fp=getMachineFrontPos(kiosk);
+    p.targetX=fp.wx; p.targetY=fp.wy;
     p._kioskTimer=2200;
   } else if(cashier) {
     p.state='WALKING_TO_CASHIER';
-    const wp=tile2world(cashier.tx,cashier.ty);
-    p.targetX=wp.x+MACHINE_DEFS.cashier.w*TILE/2;
-    p.targetY=wp.y+TILE+8;
+    const fp=getMachineFrontPos(cashier);
+    p.targetX=fp.wx+(Math.random()*16-8);
+    p.targetY=fp.wy;
   } else {
     spawnFloat(p.wx,p.wy-16,'Need cashier!','#e07070');
     kickOut(p);
@@ -389,13 +527,40 @@ function afterPayment(p) {
   kickOut(p);
 }
 
-function routeToBar(p,bar) {
+function routeToBar(p, bar) {
   p.state='WALKING_TO_BAR'; p.foodState='will_order';
-  // Walk to front face of bar, not overlapping bar tiles
-  const fp=getMachineFrontPos(bar);
-  p.targetX=fp.wx+(Math.random()*20-10);
-  p.targetY=fp.wy+8;
-  p._barId=bar.id;
+  // Assign a unique bar stool slot so patrons don't stack
+  const slotsUsed = G.patrons
+    .filter(p2 => p2.id !== p.id && p2._barId === bar.id &&
+      (p2.state==='WALKING_TO_BAR'||p2.state==='WAITING_AT_BAR'||p2.state==='EATING'))
+    .map(p2 => p2._barSlot != null ? p2._barSlot : -1);
+  let slot = 0;
+  while(slotsUsed.includes(slot)) slot++;
+  p._barId = bar.id;
+  p._barSlot = slot;
+  _setBarSlotTarget(p, bar, slot);
+}
+
+function _setBarSlotTarget(p, bar, slot) {
+  const fp  = getMachineFrontPos(bar);
+  const def = MACHINE_DEFS[bar.type];
+  const rot = bar.rotation || 0;
+  const barW = (rot%2===0 ? def.w : def.h) * TILE;
+  // Seat patrons evenly across the bar face width, max 5 visible seats
+  const maxSeats  = 5;
+  const seatSpacing = Math.min(barW / maxSeats, TILE * 0.85);
+  const totalW    = (maxSeats - 1) * seatSpacing;
+  const startX    = fp.wx - totalW / 2;
+  // Offset along the facing direction instead of always horizontal
+  const seatOff   = slot * seatSpacing;
+  // For horizontal bar (rot 0 or 2) seats spread along X; for vertical spread along Y
+  if (rot % 2 === 0) {
+    p.targetX = startX + seatOff;
+    p.targetY = fp.wy + (Math.random() * 4 - 2);  // tiny jitter so they're not pixel-perfect
+  } else {
+    p.targetX = fp.wx + (Math.random() * 4 - 2);
+    p.targetY = fp.wy - totalW/2 + seatOff;
+  }
 }
 
 function finishEating(p) {
@@ -483,7 +648,21 @@ function kickOut(p) {
   p.state='LEAVING';
   const wp=tile2world(ENT_TX(),ENT_TY());
   p.targetX=wp.x+TILE/2; p.targetY=wp.y+TILE*2.5;
-  // NO money drop here - drops only happen near machines/cashier
+
+  // Cancel any pending food order for this patron
+  G.foodOrders = G.foodOrders.filter(o => {
+    if(o.patronId !== p.id) return true;
+    // If player is currently carrying this order, drop it
+    if(typeof playerCarrying !== 'undefined' && playerCarrying?.id === o.id) {
+      playerCarrying = null;
+      updatePlayerCarryUI();
+      toast('Order cancelled — patron left','r');
+    }
+    return false;
+  });
+
+  // Free bar slot
+  p._barSlot = null;
 }
 
 function movePatron(p,dt) {
@@ -502,11 +681,14 @@ function onPatronArrival(p) {
   switch(p.state) {
     case 'ENTERING':          assignMachine(p); break;
     case 'WALKING_TO_MACHINE': startPlaying(p); break;
-    case 'WALKING_TO_CASHIER':
+    case 'WALKING_TO_CASHIER':{
       p.state='WAITING_CASHIER';
       if(!G.cashierQueue.includes(p.id)) G.cashierQueue.push(p.id);
+      // Position patron in their queue slot (line behind the counter)
+      _positionInCashierQueue(p);
       updateCashierAlert();
       break;
+    }
     case 'WALKING_TO_KIOSK':
       p.state='WAITING_KIOSK'; p._kioskTimer=2200; break;
     case 'WALKING_TO_BAR':
@@ -558,7 +740,7 @@ function getSpawnMultiplier() {
   else                 timeMult = 0.8 - (pct-0.80)/0.20 * 0.6; // 3–6 AM: 0.8→0.2
 
   // Day-of-week multiplier
-  const dow = G.dayOfWeek || 0; // 0=Mon … 6=Sun
+  const dow = G.dayOfWeek ?? 0; // 0=Mon … 6=Sun
   const DAY_MULT = [0.7, 0.75, 0.85, 0.95, 1.2, 1.6, 1.4]; // Mon–Sun
   const dayMult = DAY_MULT[dow % 7];
 

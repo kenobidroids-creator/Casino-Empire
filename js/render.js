@@ -39,9 +39,20 @@ function resize() {
 
 function clampCam() {
   const hotH = parseInt(getComputedStyle(document.getElementById('hotbar')).height)||96;
-  const WW   = (G.floorW+2*WALL)*TILE, WH = (G.floorH+2*WALL)*TILE;
-  G.camera.x = Math.max(Math.min(0,canvas.width-WW),  Math.min(0,G.camera.x));
-  G.camera.y = Math.max(Math.min(0,canvas.height-WH-hotH), Math.min(0,G.camera.y));
+  const hudH = 52;
+  const WW = (G.floorW+2*WALL)*TILE, WH = (G.floorH+2*WALL)*TILE;
+
+  // Standard bounds: camera.x/y are the world-origin screen offset
+  // Positive camera = world shifted right/down (see north/west content)
+  // Negative camera = world shifted left/up  (see south/east content)
+  const stdMinY = canvas.height - hotH - WH;  // most negative = fully scrolled south
+  const stdMaxY = hudH;                         // most positive = fully scrolled north
+
+  // Allow extra scroll south so parking lot is visible below building
+  const extraDown = TILE * 6;
+
+  G.camera.x = Math.max(canvas.width - WW - WW*0.15, Math.min(WW*0.15, G.camera.x));
+  G.camera.y = Math.max(stdMinY - extraDown, Math.min(stdMaxY, G.camera.y));
 }
 
 // ─────────────────────────────────────────
@@ -49,12 +60,14 @@ function render() {
   const cw=canvas.width, ch=canvas.height;
   const cx=G.camera.x, cy=G.camera.y;
 
-  // Void
-  ctx.fillStyle='#040208';
-  ctx.fillRect(0,0,cw,ch);
+  // ── Grass world background ──
+  _drawGrassBackground(cw, ch, cx, cy);
+
+  // ── Road and parking lot south of building ──
+  const bw=(G.floorW+2*WALL)*TILE, bh=(G.floorH+2*WALL)*TILE;
+  _drawRoadAndParking(cx, cy, bw, bh);
 
   // ── Building shell ──
-  const bw=(G.floorW+2*WALL)*TILE, bh=(G.floorH+2*WALL)*TILE;
   // Outer wall fill
   ctx.fillStyle='#1a0e06';
   ctx.fillRect(cx,cy,bw,bh);
@@ -90,6 +103,9 @@ function render() {
   // ── Dirty items (on floor) ──
   for(const d of G.dirtyItems) drawDirtyItem(d);
 
+  // ── Employees (drawn BEFORE machines so they appear behind their station) ──
+  for(const e of G.employees) drawEmployee(e);
+
   // ── Machines ──
   for(const m of G.machines) drawMachine(m);
 
@@ -103,14 +119,11 @@ function render() {
   // ── Patrons (after machines so they appear in front) ──
   for(const p of G.patrons)   drawPatron(p);
 
-  // ── Employees ──
-  for(const e of G.employees) drawEmployee(e);
-
   // ── Lost & Found returning visitors ──
   for(const v of G.lostAndFoundVisitors) drawLFVisitor(v);
 
-  // ── Lost & Found returning visitors ──
-  for(const v of G.lostAndFoundVisitors) drawLFVisitor(v);
+  // ── Parked & moving cars ──
+  drawParkingCars(cx, cy, bw, bh);
 
   // ── Placement preview ──
   drawPlacementPreview();
@@ -184,11 +197,26 @@ function drawDroppedMoney(d) {
 }
 
 function drawTip(t) {
-  const sp=w2s(t.wx,t.wy);
-  const pulse=.7+.3*Math.sin(Date.now()*.006);
-  ctx.fillStyle=`rgba(122,210,80,${pulse})`;
-  ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('💚 TIP $'+t.amount.toFixed(2),sp.x,sp.y);
+  const sp = w2s(t.wx, t.wy);
+  const pulse = 0.8 + 0.2*Math.sin(Date.now()*0.007);
+  const x = sp.x, y = sp.y;
+
+  // Drop shadow for legibility
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 6;
+
+  // Coin icon
+  ctx.font = '16px serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🪙', x, y);
+
+  // Amount — large bold text
+  ctx.font = `bold 13px monospace`;
+  ctx.fillStyle = `rgba(255,220,60,${pulse})`;
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('+$'+t.amount.toFixed(2)+' TIP', x, y - 10);
+
+  ctx.shadowBlur = 0;
 }
 
 function drawDirtyItem(d) {
@@ -329,4 +357,173 @@ function shadecol(hex,amt) {
   const g=Math.max(0,Math.min(255,((n>>8)&0xff)+amt));
   const b=Math.max(0,Math.min(255,(n&0xff)+amt));
   return `#${((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1)}`;
+}
+
+// ═══════════════════════════════════════════
+//  World background — grass, road, parking
+// ═══════════════════════════════════════════
+
+function _drawGrassBackground(cw, ch, cx, cy) {
+  // Base grass colour
+  ctx.fillStyle = '#1a3d10';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Subtle grass blade texture — seeded by screen position so it doesn't shimmer
+  const BLADE_SZ = 8;
+  const offX = ((cx % BLADE_SZ) + BLADE_SZ) % BLADE_SZ;
+  const offY = ((cy % BLADE_SZ) + BLADE_SZ) % BLADE_SZ;
+  for (let sy = -offY; sy < ch + BLADE_SZ; sy += BLADE_SZ) {
+    for (let sx = -offX; sx < cw + BLADE_SZ; sx += BLADE_SZ) {
+      // Use a cheap deterministic hash for variety
+      const hash = ((sx * 2654435761 ^ sy * 2246822519) >>> 0) % 256;
+      if (hash < 60) {
+        ctx.fillStyle = 'rgba(30,70,15,.22)';
+        ctx.fillRect(sx, sy, 2, BLADE_SZ - 1);
+      } else if (hash < 100) {
+        ctx.fillStyle = 'rgba(50,100,20,.15)';
+        ctx.fillRect(sx + 3, sy + 2, BLADE_SZ - 4, 2);
+      }
+    }
+  }
+
+  // Subtle vignette at edges
+  const grad = ctx.createRadialGradient(cw/2, ch/2, cw*0.2, cw/2, ch/2, cw*0.8);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+function _drawRoadAndParking(cx, cy, bw, bh) {
+  const roadW  = bw * 1.8;               // road wider than building
+  const roadH  = TILE * 3.5;             // 3.5 tiles tall
+  const roadX  = cx + bw/2 - roadW/2;   // centred under building
+  const roadY  = cy + bh;               // immediately below building
+
+  // Road surface
+  ctx.fillStyle = '#1a1a1e';
+  ctx.fillRect(roadX, roadY, roadW, roadH);
+
+  // Road centre dashes
+  ctx.setLineDash([TILE * 0.6, TILE * 0.4]);
+  ctx.strokeStyle = 'rgba(255,220,0,.35)';
+  ctx.lineWidth = 3;
+  const midY = roadY + roadH * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(roadX, midY);
+  ctx.lineTo(roadX + roadW, midY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Road edge lines
+  ctx.strokeStyle = 'rgba(255,255,255,.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(roadX, roadY + 4);   ctx.lineTo(roadX + roadW, roadY + 4);
+  ctx.moveTo(roadX, roadY + roadH - 4); ctx.lineTo(roadX + roadW, roadY + roadH - 4);
+  ctx.stroke();
+
+  // Pavement strip between road and building
+  ctx.fillStyle = '#2e2820';
+  ctx.fillRect(cx, cy + bh - 2, bw, TILE * 0.7);
+  ctx.fillStyle = 'rgba(201,168,76,.06)';
+  ctx.fillRect(cx, cy + bh - 2, bw, TILE * 0.7);
+
+  // Parking lot to left and right of building (grey tarmac)
+  const lotW = TILE * 8;
+  const lotH = roadH;
+  // Left lot
+  ctx.fillStyle = '#14141a';
+  ctx.fillRect(roadX, roadY, lotW, lotH);
+  _drawParkingSpaces(roadX + TILE * 0.5, roadY + TILE * 0.3, 3, lotH - TILE * 0.6);
+  // Right lot
+  const rightLotX = cx + bw + (roadW/2 - bw/2) - lotW;
+  ctx.fillStyle = '#14141a';
+  ctx.fillRect(rightLotX, roadY, lotW, lotH);
+  _drawParkingSpaces(rightLotX + TILE * 0.5, roadY + TILE * 0.3, 3, lotH - TILE * 0.6);
+
+  // Kerb between pavement and road
+  ctx.fillStyle = '#3a3a42';
+  ctx.fillRect(cx - 4, cy + bh + TILE * 0.65, bw + 8, 5);
+}
+
+function _drawParkingSpaces(x, y, cols, h) {
+  const spW = TILE * 1.4;
+  const lineColor = 'rgba(255,255,255,.1)';
+  for (let c = 0; c <= cols; c++) {
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + c * spW, y);
+    ctx.lineTo(x + c * spW, y + h);
+    ctx.stroke();
+  }
+  // Top and bottom lines
+  ctx.beginPath();
+  ctx.moveTo(x, y);       ctx.lineTo(x + cols * spW, y);
+  ctx.moveTo(x, y + h);   ctx.lineTo(x + cols * spW, y + h);
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════
+//  Parking car system
+// ═══════════════════════════════════════════
+
+const CAR_COLORS = ['#c02020','#2040c0','#208040','#c07010','#601080','#106080','#888','#c0c0c0'];
+
+function drawParkingCars(cx, cy, bw, bh) {
+  if (!G.parkingCars) return;
+  const roadY = cy + bh;
+  const lotW  = TILE * 8;
+  const roadW = bw * 1.8;
+  const roadX = cx + bw/2 - roadW/2;
+
+  for (const car of G.parkingCars) {
+    const sx = cx + car.wx;   // car wx is in building-relative coords
+    const sy = cy + car.wy;
+    _drawPixelCar(sx, sy, car.color, car.facing, car.alpha || 1);
+  }
+}
+
+function _drawPixelCar(sx, sy, color, facing, alpha) {
+  ctx.globalAlpha = alpha;
+  const w = 28, h = 16;
+  // facing 0=right, 1=left, 2=down, 3=up (screen coords)
+  ctx.save();
+  ctx.translate(sx, sy);
+  if      (facing === 1) ctx.scale(-1, 1);
+  else if (facing === 2) { ctx.rotate(Math.PI/2); }
+  else if (facing === 3) { ctx.rotate(-Math.PI/2); }
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, 3, w * 0.55, 4, 0, 0, Math.PI*2); ctx.fill();
+
+  // Body
+  ctx.fillStyle = color;
+  ctx.fillRect(-w/2, -h/2, w, h);
+  // Roof
+  ctx.fillStyle = shadecol(color, 30);
+  ctx.fillRect(-w/2+5, -h/2-5, w-10, h/2+2);
+  // Windows
+  ctx.fillStyle = 'rgba(120,200,255,.55)';
+  ctx.fillRect(-w/2+6, -h/2-4, 7, h/2+1);
+  ctx.fillRect(w/2-12, -h/2-4, 7, h/2+1);
+  // Headlights
+  ctx.fillStyle = '#ffe888';
+  ctx.fillRect(w/2-3, -h/2+2, 3, 4);
+  ctx.fillRect(w/2-3, h/2-6,  3, 4);
+  // Taillights
+  ctx.fillStyle = '#ff4444';
+  ctx.fillRect(-w/2, -h/2+2, 3, 4);
+  ctx.fillRect(-w/2,  h/2-6, 3, 4);
+  // Wheels
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-w/2+3, -h/2-3, 6, 3);
+  ctx.fillRect(w/2-9,  -h/2-3, 6, 3);
+  ctx.fillRect(-w/2+3,  h/2,   6, 3);
+  ctx.fillRect(w/2-9,   h/2,   6, 3);
+
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }

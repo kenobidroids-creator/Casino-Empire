@@ -131,7 +131,11 @@ canvas.addEventListener('mouseup',e=>{
   if(collectSwipe){collectSwipe=false;return;}
   const p=ePos(e);
   if(G.dragging){dropItem(p.x,p.y);return;}
-  if(G.moveMode){confirmMove(p.x,p.y);return;}
+  if(G.moveMode){
+    isPan=false;   // prevent camera drag after placement
+    confirmMove(p.x,p.y);
+    return;
+  }
   if(isPan){
     isPan=false;
     canvas.style.cursor=G.deleteMode?'not-allowed':'grab';
@@ -240,6 +244,7 @@ function startMoveMode(mid){
   const m=G.machines.find(m=>m.id===mid);
   if(!m) return;
   G.moveMode={machineId:mid,origTx:m.tx,origTy:m.ty};
+  G.placementRotation=m.rotation||0;  // preserve current facing
   G.selectedMid=null;
   document.getElementById('upgrade-panel').style.display='none';
   canvas.classList.add('placing');
@@ -249,7 +254,7 @@ function startMoveMode(mid){
   ghost.textContent=def.icon;
   ghost.style.display='block';
   ghost.style.left=mousePos.x+'px'; ghost.style.top=mousePos.y+'px';
-  toast('Tap / click floor to move '+def.name+'. Press Esc to cancel.','');
+  toast('Tap / click floor to move '+def.name+'. R to rotate. Esc to cancel.','');
 }
 
 function confirmMove(sx,sy){
@@ -278,6 +283,8 @@ function cancelMove(){
   document.getElementById('drag-ghost').style.display='none';
   canvas.classList.remove('placing');
   canvas.style.cursor=G.deleteMode?'not-allowed':'grab';
+  // Prevent camera drag after placement — clear pan state
+  isPan=false; pointerDown=false;
 }
 
 function exitPlacementMode(){
@@ -285,6 +292,7 @@ function exitPlacementMode(){
   hoverTile=null;
   canvas.classList.remove('placing');
   canvas.style.cursor=G.deleteMode?'not-allowed':'grab';
+  isPan=false; pointerDown=false;
   updateHotbarSelection();
   document.getElementById('place-cancel-btn').style.display='none';
 }
@@ -348,9 +356,11 @@ function handleCanvasClick(sx,sy){
 
   if(m){
     if(G.jackpots.find(j=>j.machineId===m.id)){handleJackpotClick(m.id);return;}
+    // Broken machines go straight to repair
+    if(m.broken) { openRepairPanel(m.id); return; }
     // Primary click opens action/manage panel
     if(m.type==='cashier')           openCashierPanel();
-    else if(m.type==='bar')          handleBarClick(m.id);
+    else if(m.type==='bar')          openBarPanel(m.id);
     else if(m.type==='surveillance') openSurveillancePanel();
     else                             openMachineManagePanel(m.id);
     return;
@@ -457,9 +467,16 @@ function updateHotbarAfford(){
 
 function updateFoundMoneyBadge(){
   const b=document.getElementById('found-money-badge');
-  if(b) b.style.display='none'; // hide old badge
-  if(G.collectedMoneyPool>0){
-    notif('💰 $'+G.collectedMoneyPool.toFixed(2)+' found money', 'g', null, '');
+  if(b) b.style.display='none';
+  if(G.collectedMoneyPool>0.009){
+    persistNotif('found-money',
+      '💰 $'+G.collectedMoneyPool.toFixed(2)+' swept up — held for day-end',
+      '', null);
+  } else if(G.droppedMoney.length > 0) {
+    persistNotif('found-money',
+      '💰 Money on floor — swipe to collect', '', null);
+  } else {
+    clearPersistNotif('found-money');
   }
 }
 

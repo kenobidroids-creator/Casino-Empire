@@ -4,7 +4,7 @@
 
 const G = {
   money:5000, totalEarned:0, day:1, speed:1,
-  dayOfWeek:4,  // 0=Mon … 6=Sun, start on Friday
+  dayOfWeek:0,  // 0=Mon … 6=Sun, start on Monday so players see the full week
   floorLevel:0,   // index into FLOOR_LEVELS
   floorW:FLOOR_LEVELS[0].w,
   floorH:FLOOR_LEVELS[0].h,
@@ -64,4 +64,15 @@ const G = {
   minigameResult:null,
 
   surveillanceOpen:false,
+
+  // Parking lot cars
+  parkingCars: [],   // { id, wx, wy, color, facing, state, timer, slot }
+  _nextCarId: 1,
+
+  // Loan system
+  loans:[], nextLoanId:1,
+  allTimeProfit:0,   // running total of net profit across all days
 };
+
+// Loan system state (appended by chunk 3)
+// G.loans = [{ id, principal, remaining, dailyPayment, daysLeft, interestRate }]

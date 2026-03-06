@@ -58,6 +58,45 @@ function dismissNotif(msg) {
   if(obj) { obj.el.classList.add('fading'); setTimeout(()=>{ obj.el.remove(); _notifs.splice(_notifs.indexOf(obj),1); }, 320); }
 }
 
+// ── Persistent notifications (update in-place, never bounce) ──
+const _persistNotifs = {}; // key → { el, textEl, action }
+
+function persistNotif(key, msg, icon, action) {
+  const rail = document.getElementById('notif-rail');
+  if(!rail) return;
+  if(_persistNotifs[key]) {
+    // Update text in-place — no flicker, no re-spawn
+    _persistNotifs[key].textEl.textContent = msg;
+    _persistNotifs[key].action = action;
+    return;
+  }
+  const el = document.createElement('div');
+  el.className = 'notif';
+  el.innerHTML = (icon ? `<span class="notif-icon">${icon}</span>` : '') +
+    `<span class="notif-text">${msg}</span>` +
+    `<span class="notif-close">✕</span>`;
+  const textEl = el.querySelector('.notif-text');
+  if(action) {
+    textEl.style.cursor = 'pointer';
+    textEl.addEventListener('click', () => {
+      if(_persistNotifs[key]?.action) _persistNotifs[key].action();
+    });
+  }
+  el.querySelector('.notif-close').addEventListener('click', e => {
+    e.stopPropagation();
+    clearPersistNotif(key);
+  });
+  rail.appendChild(el);
+  _persistNotifs[key] = { el, textEl, action };
+}
+
+function clearPersistNotif(key) {
+  const obj = _persistNotifs[key];
+  if(!obj) return;
+  obj.el.classList.add('fading');
+  setTimeout(() => { obj.el.remove(); delete _persistNotifs[key]; }, 320);
+}
+
 function toast(msg,cls=''){
   const c=document.getElementById('toasts');
   const t=document.createElement('div');
@@ -89,7 +128,7 @@ function updateHUD(){
   // Day-of-week label + busy indicator
   const DOW_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const DOW_BUSY  = [false,false,false,false,true,true,true];
-  const dow = (G.dayOfWeek||4) % 7;
+  const dow = (G.dayOfWeek??0) % 7;
   const dowEl = document.getElementById('h-dow');
   if(dowEl) {
     dowEl.textContent = DOW_NAMES[dow];
@@ -136,7 +175,7 @@ function updateHUD(){
 // ── Day End ────────────────────────────────
 function endDay(){
   G.day++;
-  G.dayOfWeek = ((G.dayOfWeek||4) + 1) % 7;
+  G.dayOfWeek = ((G.dayOfWeek??0) + 1) % 7;
   const wages=G.employees.reduce((s,e)=>s+EMPLOYEE_DEFS[e.type].wage,0);
   G.money-=wages;
   G.dayStats.wages+=wages;
@@ -144,18 +183,35 @@ function endDay(){
   G.speed=0;
   G.dayAcc=0;
 
-  // Dismiss all patrons at day end (they leave before next day starts)
-  for(const p of G.patrons) kickOut(p);
+  // Casino is 24/7 — patrons keep playing, we just tally the day
+
+  // Loan repayments
+  let loanPayment = 0;
+  for(const loan of G.loans) {
+    if(loan.daysLeft > 0) {
+      const pay = Math.min(loan.dailyPayment, loan.remaining);
+      G.money -= pay;
+      loan.remaining = parseFloat((loan.remaining - pay).toFixed(2));
+      loan.daysLeft--;
+      loanPayment += pay;
+    }
+  }
+  G.loans = G.loans.filter(l => l.daysLeft > 0 && l.remaining > 0.005);
+  // Clear persist notifs at day boundary so they re-evaluate fresh
+  Object.keys(_persistNotifs).forEach(k => clearPersistNotif(k));
 
   // Snapshot stats BEFORE opening modal (modal reads them), THEN reset
-  const snapshot = {...G.dayStats};
+  const snapshot = {...G.dayStats, loanPayment};
+  const net = snapshot.moneyIn - snapshot.moneyOut - wages - (snapshot.jackpotsPaid||0) - loanPayment;
+  G.allTimeProfit = (G.allTimeProfit||0) + net;
   openDayEndModal(wages, snapshot);
   G.dayStats={patronsVisited:0,moneyIn:0,moneyOut:0,wages:0,tips:0,foundMoney:0,jackpotsPaid:0};
 }
 
 function openDayEndModal(wages, snapshot){
-  const ds = snapshot || G.dayStats;  // use passed snapshot so we read pre-reset stats
-  const net=ds.moneyIn-ds.moneyOut-wages-ds.jackpotsPaid;
+  const ds = snapshot || G.dayStats;
+  const loanPay = ds.loanPayment || 0;
+  const net = ds.moneyIn - ds.moneyOut - wages - (ds.jackpotsPaid||0) - loanPay;
   const DOW_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const DOW_BUSY  = [false,false,false,false,true,true,true];
   const nextDow   = G.dayOfWeek % 7;  // already incremented in endDay
@@ -170,6 +226,11 @@ function openDayEndModal(wages, snapshot){
   document.getElementById('ded-jackpots').textContent ='$'+(ds.jackpotsPaid||0).toFixed(2);
   document.getElementById('ded-wages').textContent    ='$'+wages.toFixed(2);
   document.getElementById('ded-tips').textContent     ='$'+ds.tips.toFixed(2);
+  const loanRow = document.getElementById('ded-loan-row');
+  if(loanRow) {
+    loanRow.style.display = loanPay > 0 ? 'flex' : 'none';
+    document.getElementById('ded-loan').textContent = '-$'+loanPay.toFixed(2);
+  }
   document.getElementById('ded-net').textContent      =(net>=0?'+':'')+net.toFixed(2);
   document.getElementById('ded-net').style.color      =net>=0?'#7aba70':'#e07070';
 
@@ -850,102 +911,195 @@ function openManagementWindow(){
   const panel=document.getElementById('mgmt-panel');
   panel.style.display='block';
   renderManagementWindow();
+  // Auto-refresh stats while open
+  if(G._mgmtRefreshTimer) clearInterval(G._mgmtRefreshTimer);
+  G._mgmtRefreshTimer = setInterval(()=>{
+    if(document.getElementById('mgmt-panel').style.display==='block' && _mgmtTab==='stats')
+      _renderStatsTab(document.getElementById('mgmt-tab-body'));
+  }, 2000);
 }
 
 function closeManagementWindow(){
   document.getElementById('mgmt-panel').style.display='none';
+  if(G._mgmtRefreshTimer){ clearInterval(G._mgmtRefreshTimer); G._mgmtRefreshTimer=null; }
 }
 
-function renderManagementWindow(){
-  const list=document.getElementById('mgmt-contacts');
-  list.innerHTML='';
+// ── Management tabs state ─────────────────
+let _mgmtTab = 'stats';
 
-  // Waiting visitors (at security desk)
+function renderManagementWindow() {
+  const body = document.getElementById('mgmt-contacts');
+  body.innerHTML = `
+    <div class="mgmt-tabs">
+      <button class="mgmt-tab ${_mgmtTab==='stats'?'active':''}" onclick="_mgmtTab='stats';renderManagementWindow()">📊 Stats</button>
+      <button class="mgmt-tab ${_mgmtTab==='loans'?'active':''}" onclick="_mgmtTab='loans';renderManagementWindow()">🏦 Loans</button>
+      <button class="mgmt-tab ${_mgmtTab==='lf'?'active':''}" onclick="_mgmtTab='lf';renderManagementWindow()">🔍 L&F</button>
+    </div>
+    <div id="mgmt-tab-body"></div>`;
+  const tab = document.getElementById('mgmt-tab-body');
+  if(_mgmtTab==='stats') _renderStatsTab(tab);
+  else if(_mgmtTab==='loans') _renderLoansTab(tab);
+  else _renderLFTab(tab);
+}
+
+function _renderStatsTab(el) {
+  const ds=G.dayStats, rpm=Math.floor(calcRevPerMin());
+
+  // Weekly calendar strip
+  const DOW_SHORT=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const DOW_BUSY=[false,false,false,false,true,true,true];
+  const curDow=(G.dayOfWeek??0)%7;
+  const calCells = DOW_SHORT.map((d,i)=>{
+    const isCur = i===curDow;
+    const isBusy = DOW_BUSY[i];
+    const col = isCur ? '#c9a84c' : isBusy ? 'rgba(201,168,76,.45)' : 'rgba(255,255,255,.12)';
+    const bg  = isCur ? 'rgba(201,168,76,.22)' : 'rgba(255,255,255,.03)';
+    const bd  = isCur ? '1px solid rgba(201,168,76,.6)' : '1px solid rgba(255,255,255,.07)';
+    return `<div style="flex:1;text-align:center;padding:5px 2px;border-radius:5px;background:${bg};border:${bd}">
+      <div style="font-size:9px;color:${col};font-weight:700">${d}</div>
+      <div style="font-size:8px;margin-top:2px">${isBusy?'<span style=\'color:#f0c840\'>🔥</span>':'<span style=\'color:rgba(255,255,255,.2)\'>🌙</span>'}</div>
+      ${isCur?`<div style="width:4px;height:4px;border-radius:50%;background:#c9a84c;margin:2px auto 0"></div>`:''}
+    </div>`;
+  }).join('');
+  const calHtml = `<div style="margin-bottom:10px">
+    <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">This Week — Day ${G.day}</div>
+    <div style="display:flex;gap:3px">${calCells}</div>
+  </div>`;
+  const wages=G.employees.reduce((s,e)=>s+EMPLOYEE_DEFS[e.type].wage,0);
+  const activeMachines=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot).length;
+  const occupiedMachines=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot&&m.occupied!=null).length;
+  const loanDebt=G.loans.reduce((s,l)=>s+l.remaining,0);
+  const nextFloor=G.floorLevel+1<FLOOR_LEVELS.length?FLOOR_LEVELS[G.floorLevel+1]:null;
+  const todayNet=ds.moneyIn-ds.moneyOut;
+  el.innerHTML=calHtml+`
+    <div class="mgmt-section-header" style="margin-top:4px">Today So Far</div>
+    <div class="mgmt-stat-grid">
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Patrons</div><div class="mgmt-stat-val">${ds.patronsVisited}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Bets taken</div><div class="mgmt-stat-val green">$${ds.moneyIn.toFixed(0)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Payouts</div><div class="mgmt-stat-val red">$${ds.moneyOut.toFixed(0)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Net today</div><div class="mgmt-stat-val ${todayNet>=0?'green':'red'}">${todayNet>=0?'+':''}$${todayNet.toFixed(0)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Rev / min</div><div class="mgmt-stat-val gold">$${rpm}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Tips</div><div class="mgmt-stat-val gold">$${ds.tips.toFixed(0)}</div></div>
+    </div>
+    <div class="mgmt-section-header">Floor</div>
+    <div class="mgmt-stat-grid">
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">On floor</div><div class="mgmt-stat-val">${G.patrons.length}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Slots used</div><div class="mgmt-stat-val">${occupiedMachines}/${activeMachines}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Staff</div><div class="mgmt-stat-val">${G.employees.length}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Daily wages</div><div class="mgmt-stat-val red">$${wages}</div></div>
+    </div>
+    <div class="mgmt-section-header">All Time</div>
+    <div class="mgmt-stat-grid">
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Total earned</div><div class="mgmt-stat-val green">$${Math.floor(G.totalEarned).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Net profit</div><div class="mgmt-stat-val ${(G.allTimeProfit||0)>=0?'green':'red'}">$${Math.floor(G.allTimeProfit||0).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Day</div><div class="mgmt-stat-val">${G.day}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Loan debt</div><div class="mgmt-stat-val ${loanDebt>0?'red':'green'}">${loanDebt>0?'$'+loanDebt.toFixed(0):'None'}</div></div>
+    </div>
+    ${nextFloor?`
+    <div class="mgmt-section-header">Expansion</div>
+    <div class="mgmt-row" style="padding:6px 0">
+      <div><strong style="color:var(--gold-light)">${nextFloor.label}</strong>
+        <div class="mgmt-sub">${nextFloor.w}x${nextFloor.h} tiles — $${nextFloor.cost.toLocaleString()}</div></div>
+      <button class="mgmt-btn-call" onclick="expandFloor();renderManagementWindow()" ${G.money<nextFloor.cost?'disabled style="opacity:.4"':''}>Expand</button>
+    </div>`:`
+    <div class="mgmt-section-header">Expansion</div>
+    <div class="mgmt-row mgmt-dim"><span class="mgmt-sub">Maximum floor size reached.</span></div>`}
+    <div class="mgmt-section-header" style="margin-top:8px">Game Speed</div>
+    <div style="display:flex;gap:5px;padding:6px 0">
+      <button class="ctrl-btn ${G.speed===1?'active':''}" onclick="setSpd(1);renderManagementWindow()">1x</button>
+      <button class="ctrl-btn ${G.speed===2?'active':''}" onclick="setSpd(2);renderManagementWindow()">2x</button>
+      <button class="ctrl-btn ${G.speed===3?'active':''}" onclick="setSpd(3);renderManagementWindow()">3x</button>
+    </div>`;
+}
+
+function _renderLoansTab(el) {
+  const OFFERS=[
+    {label:'Quick Cash',amount:1000,days:5,rate:0.12,icon:'💵'},
+    {label:'Mid Loan',amount:3000,days:10,rate:0.10,icon:'💰'},
+    {label:'Big Backer',amount:8000,days:18,rate:0.08,icon:'🏦'},
+    {label:'Whale Capital',amount:20000,days:30,rate:0.06,icon:'🐳'},
+  ];
+  const totalDebt=G.loans.reduce((s,l)=>s+l.remaining,0);
+  const LIMIT=25000;
+  let html='';
+  if(G.loans.length>0){
+    html+=`<div class="mgmt-section-header" style="margin-top:4px">Active Loans</div>`;
+    for(const loan of G.loans){
+      const pct=Math.round((1-loan.remaining/loan.principal)*100);
+      html+=`<div class="mgmt-row">
+        <div><strong style="color:var(--gold-light)">$${loan.principal.toLocaleString()}</strong>
+          <div class="mgmt-sub">$${loan.remaining.toFixed(0)} left — ${loan.daysLeft}d</div>
+          <div class="loan-bar-wrap"><div class="loan-bar-fill" style="width:${pct}%"></div></div></div>
+        <span style="font-size:10px;color:var(--text-muted)">$${loan.dailyPayment}/day</span>
+      </div>`;
+    }
+  }
+  html+=`<div class="mgmt-section-header">Borrow Money</div>`;
+  if(totalDebt>=LIMIT){
+    html+=`<p class="mgmt-sub" style="padding:8px 0;color:#e07070">Debt limit ($${LIMIT.toLocaleString()}) reached. Repay first.</p>`;
+  } else {
+    for(const o of OFFERS){
+      const total=Math.round(o.amount*(1+o.rate)), daily=Math.ceil(total/o.days);
+      const ok=totalDebt+o.amount<=LIMIT;
+      html+=`<div class="mgmt-row">
+        <div><strong style="color:var(--gold-light)">${o.icon} ${o.label}</strong>
+          <div class="mgmt-sub">$${o.amount.toLocaleString()} → repay $${total.toLocaleString()} over ${o.days} days</div>
+          <div class="mgmt-sub" style="color:#e09050">$${daily}/day · ${(o.rate*100).toFixed(0)}% interest</div></div>
+        <button class="mgmt-btn-pay" onclick="takeLoan(${o.amount},${o.days},${o.rate})" ${ok?'':'disabled style="opacity:.4"'}>Borrow</button>
+      </div>`;
+    }
+  }
+  if(!G.loans.length) html=`<p style="color:var(--text-muted);font-size:var(--fs-xs);padding:4px 0 8px">No active loans.</p>`+html;
+  el.innerHTML=html;
+}
+
+function takeLoan(amount,days,rate){
+  const total=Math.round(amount*(1+rate)), daily=Math.ceil(total/days);
+  if(!confirm(`Borrow $${amount.toLocaleString()}? Repay $${total.toLocaleString()} ($${daily}/day for ${days} days).`)) return;
+  G.money+=amount;
+  G.loans.push({id:G.nextLoanId++,principal:amount,remaining:total,dailyPayment:daily,daysLeft:days,interestRate:rate});
+  toast(`Received $${amount.toLocaleString()} — $${daily}/day for ${days} days`,'g');
+  renderManagementWindow();
+}
+
+function _renderLFTab(el){
+  let html='';
   const waiting=G.lostAndFoundVisitors.filter(v=>v.state==='WAITING');
   if(waiting.length){
-    const hdr=document.createElement('div');
-    hdr.className='mgmt-section-header'; hdr.textContent='At Security Desk';
-    list.appendChild(hdr);
+    html+=`<div class="mgmt-section-header" style="margin-top:4px">At Security Desk</div>`;
     for(const v of waiting){
       const c=G.lostAndFoundContacts.find(c=>c.name===v.patronName);
-      const selfArrived=c&&c.status==='self_arrived';
-      const row=document.createElement('div'); row.className='mgmt-row mgmt-urgent';
-      row.innerHTML=`<div>
-        <strong>${v.patronName}</strong>${selfArrived?' <span style="color:#60d0ff;font-size:9px">[Walked in]</span>':''}
+      html+=`<div class="mgmt-row mgmt-urgent"><div>
+        <strong>${v.patronName}</strong>${c&&c.status==='self_arrived'?' <span style="color:#60d0ff;font-size:9px">[Walked in]</span>':''}
         <br><span class="mgmt-sub">Here now — $${v.amount.toFixed(2)}</span>
-        ${c?`<br><span class="mgmt-sub">Phone: ${c.phone} &nbsp;•&nbsp; Day ${c.day}</span>`:''}
-      </div>
-      <button class="mgmt-btn-pay" onclick="claimFoundMoney(${v.id})">Pay Out $${v.amount.toFixed(2)}</button>`;
-      list.appendChild(row);
+        ${c?`<br><span class="mgmt-sub">Phone: ${c.phone} · Day ${c.day}</span>`:''}
+      </div><button class="mgmt-btn-pay" onclick="claimFoundMoney(${v.id})">Pay $${v.amount.toFixed(2)}</button></div>`;
     }
   }
-
-  // Walking visitors
   const walking=G.lostAndFoundVisitors.filter(v=>v.state==='WALKING');
   if(walking.length){
-    const hdr=document.createElement('div');
-    hdr.className='mgmt-section-header'; hdr.textContent='En Route';
-    list.appendChild(hdr);
-    for(const v of walking){
-      const c=G.lostAndFoundContacts.find(c=>c.name===v.patronName);
-      const selfArrived=c&&c.status==='self_arrived';
-      const row=document.createElement('div'); row.className='mgmt-row';
-      row.innerHTML=`<div><strong>${v.patronName}</strong>${selfArrived?' <span style="color:#60d0ff;font-size:9px">[Walked in]</span>':''}
-        <br><span class="mgmt-sub">Walking to desk… $${v.amount.toFixed(2)}</span></div>`;
-      list.appendChild(row);
-    }
+    html+=`<div class="mgmt-section-header">En Route</div>`;
+    for(const v of walking) html+=`<div class="mgmt-row"><div><strong>${v.patronName}</strong><br><span class="mgmt-sub">Walking… $${v.amount.toFixed(2)}</span></div></div>`;
   }
-
-  // Uncalled contacts
   const uncalled=G.lostAndFoundContacts.filter(c=>c.status==='uncalled');
   if(uncalled.length){
-    const hdr=document.createElement('div');
-    hdr.className='mgmt-section-header'; hdr.textContent='Lost & Found — Awaiting Contact';
-    list.appendChild(hdr);
-    for(const c of uncalled){
-      const row=document.createElement('div'); row.className='mgmt-row';
-      row.innerHTML=`<div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}
-        <br><span class="mgmt-sub">Day ${c.day} &nbsp;•&nbsp; ${c.phone}</span></div>
-        <button class="mgmt-btn-call" onclick="callPatron(${c.id});renderManagementWindow()">📞 Call</button>`;
-      list.appendChild(row);
-    }
+    html+=`<div class="mgmt-section-header">Awaiting Contact</div>`;
+    for(const c of uncalled) html+=`<div class="mgmt-row"><div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}<br><span class="mgmt-sub">Day ${c.day} · ${c.phone}</span></div><button class="mgmt-btn-call" onclick="callPatron(${c.id});renderManagementWindow()">📞 Call</button></div>`;
   }
-
-  // Called / self-arrived contacts log
   const called=G.lostAndFoundContacts.filter(c=>c.status==='called'||c.status==='self_arrived');
   if(called.length){
-    const hdr=document.createElement('div');
-    hdr.className='mgmt-section-header'; hdr.textContent='Contact Log — On Their Way';
-    list.appendChild(hdr);
-    for(const c of called){
-      const isSelf=c.status==='self_arrived';
-      const row=document.createElement('div'); row.className='mgmt-row mgmt-dim';
-      row.innerHTML=`<div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}
-        <br><span class="mgmt-sub">Day ${c.day} &nbsp;•&nbsp; ${c.phone}</span></div>
-        <span class="mgmt-status">${isSelf?'Walked in 🚶':'Called ✓'}</span>`;
-      list.appendChild(row);
-    }
+    html+=`<div class="mgmt-section-header">On Their Way</div>`;
+    for(const c of called) html+=`<div class="mgmt-row mgmt-dim"><div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}<br><span class="mgmt-sub">Day ${c.day} · ${c.phone}</span></div><span class="mgmt-status">${c.status==='self_arrived'?'Walked in 🚶':'Called ✓'}</span></div>`;
   }
-
-  // Claimed contacts (for record keeping)
   const claimed=G.lostAndFoundContacts.filter(c=>c.status==='claimed');
   if(claimed.length){
-    const hdr=document.createElement('div');
-    hdr.className='mgmt-section-header'; hdr.textContent='Resolved';
-    list.appendChild(hdr);
-    for(const c of claimed.slice(-5)){  // show last 5
-      const row=document.createElement('div'); row.className='mgmt-row mgmt-dim';
-      row.innerHTML=`<div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}
-        <br><span class="mgmt-sub">Day ${c.day}</span></div>
-        <span class="mgmt-status" style="color:#7aba70">Paid ✓</span>`;
-      list.appendChild(row);
-    }
+    html+=`<div class="mgmt-section-header">Resolved</div>`;
+    for(const c of claimed.slice(-5)) html+=`<div class="mgmt-row mgmt-dim"><div><strong>${c.name}</strong> — $${c.amount.toFixed(2)}<br><span class="mgmt-sub">Day ${c.day}</span></div><span class="mgmt-status" style="color:#7aba70">Paid ✓</span></div>`;
   }
-
-  if(!list.children.length){
-    list.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:20px">No lost & found contacts yet.<br><small>Scan dropped money in Surveillance to add contacts.</small></p>';
-  }
+  if(!html) html=`<p style="color:var(--text-muted);text-align:center;padding:20px">No lost & found contacts yet.<br><small>Scan dropped money in Surveillance to add contacts.</small></p>`;
+  el.innerHTML=html;
 }
+
 
 // ── Draggable panels ─────────────────────────
 function makePanelsDraggable() {
@@ -963,6 +1117,7 @@ function attachDrag(panel) {
        e.target.tagName==='CANVAS'||e.target.closest('.till-bills')||
        e.target.closest('.pay-area')||e.target.closest('.upg-options')||
        e.target.closest('#mgmt-contacts')||e.target.closest('#surv-grid')||
+       e.target.closest('#bar-orders-list')||
        e.target.closest('.mg-controls')) return;
     dragging=true;
     const r=panel.getBoundingClientRect();
@@ -1172,27 +1327,34 @@ function saveGame(){
     const savedPatrons = G.patrons.map(p=>({
       id:p.id, name:p.name, color:p.color, hairColor:p.hairColor,
       wx:p.wx, wy:p.wy,
-      state: (p.state==='PLAYING'||p.state==='IDLE_AT_TABLE') ? 'ENTERING' : p.state,
+      state: (p.state==='PLAYING'||p.state==='IDLE_AT_TABLE'||p.state==='WANDERING') ? 'ENTERING' : p.state,
       targetX:p.targetX, targetY:p.targetY, speed:p.speed,
       budget:p.budget, ticketValue:p.ticketValue, ticketPaid:p.ticketPaid,
       wantsFood:p.wantsFood, foodState:p.foodState,
-      machineId:null,  // machines will be reoccupied fresh on load
+      machineId:null,
       tableId:p.tableId||null, tableSeat:p.tableSeat||0,
+      isHighRoller:p.isHighRoller||false,
       _spentTotal:p._spentTotal||0, _wonTotal:p._wonTotal||0,
       _machineVisits:p._machineVisits||{}, _favMachine:p._favMachine||null,
       _mood:p._mood!=null?p._mood:100,
     }));
     localStorage.setItem('casinoEmpireV5',JSON.stringify({
-      v:5, money:G.money, totalEarned:G.totalEarned, day:G.day,
-      dayOfWeek:G.dayOfWeek||4,
+      v:5, money:G.money, totalEarned:G.totalEarned, allTimeProfit:G.allTimeProfit||0, day:G.day,
+      dayOfWeek:G.dayOfWeek??0,
       speed:G.speed, floorLevel:G.floorLevel,
       nextMid:G.nextMid, nextContactId:G.nextContactId,
       nextPid:G.nextPid||1,
       dayAcc:G.dayAcc||0,
       machines:G.machines.map(m=>({
         id:m.id,type:m.type,tx:m.tx,ty:m.ty,rotation:m.rotation||0,
-        upgrades:m.upgrades,totalEarned:m.totalEarned||0
+        upgrades:m.upgrades,totalEarned:m.totalEarned||0,
+        health:m.health??100,broken:m.broken||false
       })),
+      employees:G.employees.map(e=>({
+        id:e.id,type:e.type,name:e.name,wx:e.wx,wy:e.wy,speed:e.speed
+      })),
+      nextEid:G.nextEid||1,
+      loans:G.loans||[], nextLoanId:G.nextLoanId||1,
       lostAndFoundContacts:G.lostAndFoundContacts,
       patrons:savedPatrons,
     }));
@@ -1208,16 +1370,29 @@ function loadGame(){
     const d=JSON.parse(raw); if(!d||d.v<5) return false;
     G.money=d.money||5000; G.totalEarned=d.totalEarned||0;
     G.day=d.day||1; G.speed=d.speed||1;
-    G.dayOfWeek=d.dayOfWeek!=null?d.dayOfWeek:4;
+    G.dayOfWeek=d.dayOfWeek!=null?d.dayOfWeek:0;
     G.floorLevel=d.floorLevel||0;
     G.floorW=FLOOR_LEVELS[G.floorLevel].w;
     G.floorH=FLOOR_LEVELS[G.floorLevel].h;
     G.nextMid=d.nextMid||1;
     G.nextContactId=d.nextContactId||1;
     G.lostAndFoundContacts=d.lostAndFoundContacts||[];
+    G.nextEid=d.nextEid||1;
+    G.employees=(d.employees||[]).map(e=>({
+      ...e,
+      state:'IDLE', task:null, taskId:null,
+      carryingOrder:null,
+      targetX:e.wx, targetY:e.wy,
+    }));
+    // Send loaded employees to their posts
+    setTimeout(()=>{ for(const e of G.employees) walkToPost(e); }, 100);
+    G.loans=d.loans||[];
+    G.nextLoanId=d.nextLoanId||1;
+    G.allTimeProfit=d.allTimeProfit||0;
     G.machines=(d.machines||[]).map(m=>({
       ...m,occupied:null,rotation:m.rotation||0,
-      upgrades:m.upgrades||{speed:0,luck:0,bet:0},totalEarned:m.totalEarned||0
+      upgrades:m.upgrades||{speed:0,luck:0,bet:0},totalEarned:m.totalEarned||0,
+      health:m.health??100,broken:m.broken||false
     }));
     // TABLE_STATES is in-memory only — re-initialise for every table game machine
     for(const m of G.machines) {
@@ -1228,17 +1403,18 @@ function loadGame(){
     G.dayAcc  = d.dayAcc||0;
     G.patrons = (d.patrons||[]).map(p=>({
       ...p,
-      // Any patron that was mid-journey or stuck re-enters fresh
       state: (p.state==='LEAVING'||p.state==='WAITING_CASHIER'||
               p.state==='WAITING_KIOSK'||p.state==='WAITING_AT_BAR'||
               p.state==='EATING'||p.state==='WAITING_JACKPOT'||
-              p.state==='IDLE_AT_TABLE'||p.state==='PLAYING')
+              p.state==='IDLE_AT_TABLE'||p.state==='PLAYING'||
+              p.state==='WANDERING')
               ? 'ENTERING' : p.state,
       playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
-      _kioskTimer:0, _barId:null, _retryAcc:0,
+      _kioskTimer:0, _barId:null, _retryAcc:0, _waitTimer:0,
       _machineVisits:p._machineVisits||{}, _favMachine:p._favMachine||null,
       _mood:p._mood!=null?p._mood:100, _thought:null,
       _watchTimer:0, machineId:null, tableId:null,
+      isHighRoller:p.isHighRoller||false,
     }));
     return true;
   } catch(e){return false;}
@@ -1299,6 +1475,7 @@ function loop(ts){
   updateHUD();
   tickCashierFP();
   tickPatronPanel();
+  tickParking(dt);
   render();
   requestAnimationFrame(loop);
 }
@@ -1323,7 +1500,12 @@ clampCam();
 makePanelsDraggable();
 
 function centerCamera() {
-  G.camera.x = Math.round((canvas.width  - (G.floorW+2*WALL)*TILE) / 2);
-  G.camera.y = Math.round((canvas.height - (G.floorH+2*WALL)*TILE) / 2 - 30);
+  const hotH  = document.getElementById('hotbar')?.offsetHeight || 96;
+  const hudH  = 52;
+  const WW = (G.floorW+2*WALL)*TILE;
+  const WH = (G.floorH+2*WALL)*TILE;
+  const usableH = canvas.height - hudH - hotH;
+  G.camera.x = Math.round((canvas.width - WW) / 2);
+  G.camera.y = Math.round(hudH + (usableH - WH) / 2);
   clampCam();
 }

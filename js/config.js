@@ -30,22 +30,26 @@ const MACHINE_DEFS = {
   slot_basic: {
     name:'Basic Slot',   icon:'🎰', color:'#9a1818', w:1, h:1,
     cost:200,  betMin:1,  betMax:4,   winRate:.22, winMultMin:1.5, winMultMax:4.2,
-    playTime:4000, tier:1, isSlot:true, houseEdge:0.373
+    playTime:4000, tier:1, isSlot:true, houseEdge:0.373,
+    repairCost:50,  degradePerSpin:1.8  // health lost per spin
   },
   slot_silver: {
     name:'Silver Slot',  icon:'🎲', color:'#4a6070', w:1, h:1,
     cost:650,  betMin:3,  betMax:12,  winRate:.25, winMultMin:1.8, winMultMax:4.4,
-    playTime:3600, tier:2, isSlot:true, houseEdge:0.225
+    playTime:3600, tier:2, isSlot:true, houseEdge:0.225,
+    repairCost:120, degradePerSpin:1.4
   },
   slot_gold: {
     name:'Gold Slot',    icon:'⭐', color:'#b07008', w:1, h:1,
     cost:2200, betMin:8,  betMax:30,  winRate:.28, winMultMin:2.0, winMultMax:4.0,
-    playTime:3200, tier:3, isSlot:true, houseEdge:0.16
+    playTime:3200, tier:3, isSlot:true, houseEdge:0.16,
+    repairCost:300, degradePerSpin:1.0
   },
   slot_diamond: {
     name:'Diamond Slot', icon:'💎', color:'#1058a8', w:1, h:1,
     cost:8500, betMin:25, betMax:100, winRate:.30, winMultMin:2.0, winMultMax:3.8,
-    playTime:2800, tier:4, isSlot:true, houseEdge:0.13
+    playTime:2800, tier:4, isSlot:true, houseEdge:0.13,
+    repairCost:800, degradePerSpin:0.7
   },
 
   // ── Support ──────────────────────────────
@@ -120,10 +124,15 @@ const PATRON_NAMES=['Alice','Bob','Carol','Dave','Eve','Frank','Grace','Hank','I
                      'Uma','Vic','Wendy','Xav','Yara','Zoe'];
 
 function getPatronOffset(rot) {
+  // rot 0 = facing south (default, patron stands below machine)
+  // rot 1 = facing west  (patron stands left)
+  // rot 2 = facing north (patron stands above)
+  // rot 3 = facing east  (patron stands right)
   switch(rot) {
-    case 0: return {dx:0,  dy:1 };
-    case 1: return {dx:-1, dy:0 };
-    case 2: return {dx:0,  dy:-1};
-    case 3: return {dx:1,  dy:0 };
+    case 0: return {dx: 0,    dy: 0.7 };  // south
+    case 1: return {dx:-0.7,  dy: 0   };  // west
+    case 2: return {dx: 0,    dy:-0.7 };  // north
+    case 3: return {dx: 0.7,  dy: 0   };  // east
+    default:return {dx: 0,    dy: 0.7 };
   }
 }

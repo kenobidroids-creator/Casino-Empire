@@ -494,3 +494,73 @@ body{background:#06040a;overflow:hidden;font-family:'Rajdhani',sans-serif;
   #notif-rail{top:66px;width:min(220px,70vw);}
   .notif{font-size:10px;padding:5px 8px;}
 }
+
+/* ── Management tabs ── */
+.mgmt-tabs{display:flex;gap:4px;margin-bottom:10px;}
+.mgmt-tab{flex:1;padding:6px 4px;border-radius:5px;border:1px solid rgba(201,168,76,.18);
+  background:rgba(201,168,76,.04);color:var(--text-muted);
+  font-family:'Rajdhani',sans-serif;font-weight:700;font-size:var(--fs-xs);cursor:pointer;
+  transition:all .12s;}
+.mgmt-tab.active{background:rgba(201,168,76,.16);border-color:var(--gold);color:var(--gold-light);}
+.mgmt-tab:hover:not(.active){background:rgba(201,168,76,.09);color:var(--gold);}
+
+/* ── Stats grid ── */
+.mgmt-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;}
+.mgmt-stat-box{background:rgba(255,255,255,.03);border-radius:5px;padding:5px 8px;border:1px solid rgba(255,255,255,.04);}
+.mgmt-stat-lbl{font-size:var(--fs-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;}
+.mgmt-stat-val{font-size:var(--fs-lg);color:var(--gold-light);font-weight:700;line-height:1.2;}
+.mgmt-stat-val.green{color:#7aba70;}
+.mgmt-stat-val.red{color:#e07878;}
+.mgmt-stat-val.gold{color:#f0c840;}
+
+/* ── Loan bar ── */
+.loan-bar-wrap{width:100%;height:4px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:4px;}
+.loan-bar-fill{height:100%;border-radius:2px;background:linear-gradient(to right,#e07050,#7aba70);transition:width .4s;}
+
+/* ── Management panel wider on desktop ── */
+#mgmt-panel{width:min(520px,96vw);}
+
+/* ── Bar order panel ── */
+.bar-order-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 10px; border-radius:7px; margin-bottom:6px;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
+  transition:background .15s;
+}
+.bar-order-row.highlighted {
+  background:rgba(80,220,120,.1); border-color:rgba(80,220,120,.35);
+}
+.bar-order-row.dimmed { opacity:.5; }
+
+.bar-order-left  { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+.bar-order-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; margin-left:8px; }
+
+.bar-item-icon   { font-size:22px; line-height:1; flex-shrink:0; }
+.bar-order-info  { min-width:0; }
+.bar-item-name   { font-size:var(--fs-sm); font-weight:700; color:var(--gold-light); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bar-patron-name { font-size:var(--fs-xs); color:var(--text-muted); margin-top:1px; }
+.bar-patron-name:hover { color:var(--gold); }
+.bar-tip         { font-size:9px; color:#c9a84c; }
+
+/* State badges */
+.bar-badge { display:inline-block; font-size:8px; font-weight:700; padding:2px 6px; border-radius:10px; margin-top:3px; letter-spacing:.3px; }
+.bar-badge.waiting   { background:rgba(200,160,40,.18); color:#d4a820; border:1px solid rgba(200,160,40,.3); }
+.bar-badge.cooking   { background:rgba(220,100,30,.18); color:#e08040; border:1px solid rgba(220,100,30,.3); }
+.bar-badge.ready     { background:rgba(80,200,80,.18);  color:#60d060; border:1px solid rgba(80,200,80,.3); }
+.bar-badge.delivering{ background:rgba(60,140,220,.18); color:#60a0e0; border:1px solid rgba(60,140,220,.3); }
+.bar-badge.staff     { background:rgba(160,100,220,.18);color:#b080e0; border:1px solid rgba(160,100,220,.3); }
+
+/* Action buttons */
+.bar-action-btn {
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px;
+  padding:5px 10px; border-radius:6px; cursor:pointer; border:none;
+  transition:all .12s; white-space:nowrap;
+}
+.bar-action-btn.take    { background:rgba(201,168,76,.2); color:var(--gold-light); border:1px solid rgba(201,168,76,.4); }
+.bar-action-btn.take:hover { background:rgba(201,168,76,.35); }
+.bar-action-btn.deliver { background:rgba(80,200,80,.18); color:#60d060; border:1px solid rgba(80,200,80,.35); }
+.bar-action-btn.deliver:hover, .bar-action-btn.deliver.active { background:rgba(80,200,80,.35); }
+
+/* Cooking progress bar */
+.bar-cook-bar  { width:70px; height:5px; background:rgba(255,255,255,.1); border-radius:3px; overflow:hidden; margin-top:2px; }
+.bar-cook-fill { height:100%; background:linear-gradient(to right,#e07030,#f0c840); border-radius:3px; transition:width .5s; }
