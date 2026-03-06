@@ -16,7 +16,7 @@ const ENT_TY = () => G.floorH - 1;
 
 const REEL_SYMBOLS = ['7','BAR','🔔','🍊','🍋','🍒','⭐','💎'];
 const REEL_COLORS  = ['#ff4444','#fff','#f0c040','#f07020','#e8e040','#e04060','#f8e040','#80c8ff'];
-const JACKPOT_THRESH  = 50;
+const JACKPOT_THRESH  = 200;
 const JACKPOT_TIMEOUT = 50000;
 
 // ── Slot house-edge math ─────────────────────────────────────────────────
@@ -29,26 +29,26 @@ const JACKPOT_TIMEOUT = 50000;
 const MACHINE_DEFS = {
   slot_basic: {
     name:'Basic Slot',   icon:'🎰', color:'#9a1818', w:1, h:1,
-    cost:200,  betMin:1,  betMax:4,   winRate:.22, winMultMin:1.5, winMultMax:4.2,
-    playTime:4000, tier:1, isSlot:true, houseEdge:0.373,
+    cost:200,  betMin:1,  betMax:4,   winRate:.20, winMultMin:1.2, winMultMax:3.2,
+    playTime:4000, tier:1, isSlot:true, houseEdge:0.44,
     repairCost:50,  degradePerSpin:1.8  // health lost per spin
   },
   slot_silver: {
     name:'Silver Slot',  icon:'🎲', color:'#4a6070', w:1, h:1,
-    cost:650,  betMin:3,  betMax:12,  winRate:.25, winMultMin:1.8, winMultMax:4.4,
-    playTime:3600, tier:2, isSlot:true, houseEdge:0.225,
+    cost:650,  betMin:3,  betMax:12,  winRate:.22, winMultMin:1.2, winMultMax:3.2,
+    playTime:3600, tier:2, isSlot:true, houseEdge:0.37,
     repairCost:120, degradePerSpin:1.4
   },
   slot_gold: {
     name:'Gold Slot',    icon:'⭐', color:'#b07008', w:1, h:1,
-    cost:2200, betMin:8,  betMax:30,  winRate:.28, winMultMin:2.0, winMultMax:4.0,
-    playTime:3200, tier:3, isSlot:true, houseEdge:0.16,
+    cost:2200, betMin:8,  betMax:30,  winRate:.24, winMultMin:1.2, winMultMax:3.2,
+    playTime:3200, tier:3, isSlot:true, houseEdge:0.30,
     repairCost:300, degradePerSpin:1.0
   },
   slot_diamond: {
     name:'Diamond Slot', icon:'💎', color:'#1058a8', w:1, h:1,
-    cost:8500, betMin:25, betMax:100, winRate:.30, winMultMin:2.0, winMultMax:3.8,
-    playTime:2800, tier:4, isSlot:true, houseEdge:0.13,
+    cost:8500, betMin:25, betMax:100, winRate:.26, winMultMin:1.2, winMultMax:3.2,
+    playTime:2800, tier:4, isSlot:true, houseEdge:0.26,
     repairCost:800, degradePerSpin:0.7
   },
 

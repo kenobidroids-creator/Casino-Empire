@@ -23,7 +23,7 @@ function spawnPatron() {
     wx:wp.x+TILE/2, wy:wp.y+TILE/2+TILE*1.3,
     state:'ENTERING',
     targetX:wp.x+TILE/2, targetY:wp.y+TILE/2,
-    speed:50+Math.random()*40,
+    speed:90+Math.random()*50,
     machineId:null, ticketValue:0, ticketPaid:false,
     // High rollers have 5–15× normal budget
     budget: isHighRoller

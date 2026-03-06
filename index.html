@@ -152,6 +152,19 @@
   <button class="btn-jp" onclick="confirmJackpay()">Hand Pay</button>
 </div>
 
+<!-- SECURITY / LOST & FOUND CLAIM PANEL -->
+<div id="lf-claim-panel" class="panel" style="display:none;width:min(300px,92vw);text-align:center">
+  <button class="panel-close" onclick="closeLFClaimPanel()">✕</button>
+  <h2>📦 Lost &amp; Found Claim</h2>
+  <div style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:6px" id="lf-claim-name">Patron Name</div>
+  <div style="font-size:26px;font-weight:700;color:#7aba70;margin:8px 0" id="lf-claim-amount">$0.00</div>
+  <div style="font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:14px">Return this money to the patron?</div>
+  <div style="display:flex;gap:8px;justify-content:center">
+    <button class="btn-pay" onclick="confirmLFClaim()">✅ Return Money</button>
+    <button class="btn-clr" onclick="closeLFClaimPanel()">Later</button>
+  </div>
+</div>
+
 <!-- DAY END MODAL -->
 <div id="day-end-modal">
   <div id="day-end-box">

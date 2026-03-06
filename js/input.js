@@ -350,6 +350,23 @@ function handleCanvasClick(sx,sy){
     if(Math.hypot(sp.x-sx,sp.y-sy)<20){handleDirtyClick(d.id);return;}
   }
 
+  // L&F visitor waiting at security desk — clickable like a patron
+  for(const v of G.lostAndFoundVisitors){
+    if(v.state !== 'WAITING') continue;
+    const sp=w2s(v.wx,v.wy);
+    if(Math.hypot(sp.x-sx,sp.y-sy)<18){ openLFClaimPanel(v.id); return; }
+  }
+
+  // Click patron BEFORE tile validation — patrons can stand in wall/queue areas
+  for(const p of G.patrons){
+    const sp=w2s(p.wx,p.wy);
+    if(Math.hypot(sp.x-sx,sp.y-sy)<16){
+      if(typeof _highlightPid!=='undefined'&&_highlightPid!==null) handlePatronDelivery(p.id);
+      else openPatronThoughts(p.id);
+      return;
+    }
+  }
+
   if(!validTile(t.tx,t.ty)){closeUpgradePanel();return;}
 
   const m=findMachineAtTile(t.tx,t.ty);
@@ -362,18 +379,14 @@ function handleCanvasClick(sx,sy){
     if(m.type==='cashier')           openCashierPanel();
     else if(m.type==='bar')          openBarPanel(m.id);
     else if(m.type==='surveillance') openSurveillancePanel();
+    else if(m.type==='security') {
+      // If a L&F visitor is waiting at this desk, open the claim panel
+      const waiting = G.lostAndFoundVisitors.find(v=>v.machineId===m.id&&v.state==='WAITING');
+      if(waiting) openLFClaimPanel(waiting.id);
+      else openMachineManagePanel(m.id);
+    }
     else                             openMachineManagePanel(m.id);
     return;
-  }
-
-  // Click patron for delivery OR thought panel
-  for(const p of G.patrons){
-    const sp=w2s(p.wx,p.wy);
-    if(Math.hypot(sp.x-sx,sp.y-sy)<16){
-      if(playerCarrying) handlePatronDelivery(p.id);
-      else openPatronThoughts(p.id);
-      return;
-    }
   }
 
   closeUpgradePanel();
@@ -468,16 +481,7 @@ function updateHotbarAfford(){
 function updateFoundMoneyBadge(){
   const b=document.getElementById('found-money-badge');
   if(b) b.style.display='none';
-  if(G.collectedMoneyPool>0.009){
-    persistNotif('found-money',
-      '💰 $'+G.collectedMoneyPool.toFixed(2)+' swept up — held for day-end',
-      '', null);
-  } else if(G.droppedMoney.length > 0) {
-    persistNotif('found-money',
-      '💰 Money on floor — swipe to collect', '', null);
-  } else {
-    clearPersistNotif('found-money');
-  }
+  clearPersistNotif('found-money'); // silent — shown in day-end summary only
 }
 
 // ══════════════════════════════════════════

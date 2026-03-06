@@ -84,7 +84,7 @@ function findTask(e) {
     if(!cashier) return false;
     if(G.cashierServing) return false;
     e.task='cashier';
-    const fp=getMachineFrontPos(cashier);
+    const fp=getMachineBackPos(cashier);
     e.targetX=fp.wx; e.targetY=fp.wy;
     e.state='WALKING';
     return true;
@@ -96,7 +96,7 @@ function findTask(e) {
     const m=G.machines.find(m=>m.id===j.machineId);
     if(!m) return false;
     e.task='jackpot'; e.taskId=j.id;
-    const fp=getMachineFrontPos(m);
+    const fp=getMachineBackPos(m);
     e.targetX=fp.wx; e.targetY=fp.wy;
     e.state='WALKING';
     return true;
@@ -110,7 +110,7 @@ function findTask(e) {
       e.task='food'; e.taskId=order.id;
       const bar=G.machines.find(m=>m.id===order.barId);
       if(!bar){order.serverId=null;e.task=null;return false;}
-      const fp=getMachineFrontPos(bar);
+      const fp=getMachineBackPos(bar);
       e.targetX=fp.wx; e.targetY=fp.wy;
       e.state='WALKING';
       return true;
@@ -122,7 +122,7 @@ function findTask(e) {
       e.task='deliver'; e.taskId=ready.id;
       const bar=G.machines.find(m=>m.id===ready.barId);
       if(!bar) return false;
-      const fp=getMachineFrontPos(bar);
+      const fp=getMachineBackPos(bar);
       e.targetX=fp.wx; e.targetY=fp.wy;
       e.state='WALKING';
       return true;
@@ -151,13 +151,23 @@ function doWork(e,dt) {
     const delay = 1400 / Math.max(1, G.speed);
     setTimeout(()=>{
       const p2=G.patrons.find(p=>p.id===pid);
-      if(!p2){G.cashierQueue.shift();updateCashierAlert();return;}
-      G.money -= p2.ticketValue;
-      spawnFloat(p2.wx, p2.wy-20, 'Paid $'+p2.ticketValue.toFixed(2), '#7aca70');
-      p2.state='PAID';
+      // Guard: patron may have already been paid (by player) or left
+      if(!p2 || p2.ticketValue <= 0) {
+        G.cashierQueue = G.cashierQueue.filter(id=>id!==pid);
+        _refreshCashierQueuePositions();
+        updateCashierAlert();
+        return;
+      }
+      const amt = p2.ticketValue;
+      G.money -= amt;
+      G.dayStats.moneyOut = (G.dayStats.moneyOut||0) + amt;
+      spawnFloat(p2.wx, p2.wy-20, 'Paid $'+amt.toFixed(2), '#7aca70');
+      p2.ticketValue = 0;
+      p2.ticketPaid = true;
       G.cashierQueue.shift();
       _refreshCashierQueuePositions();
       updateCashierAlert();
+      afterPayment(p2);  // directly route patron onward — no PAID state needed
     }, delay);
     e.state='IDLE'; e.task=null;
   }

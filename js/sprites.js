@@ -497,21 +497,47 @@ function drawPatron(p) {
     ctx.fillText('👑',x,y-10);
   }
 
-  // State indicators
-  const em=p.state==='PLAYING'?'🎰'
-          :p.state==='WAITING_CASHIER'||p.state==='WALKING_TO_CASHIER'?'💵'
-          :p.state==='WAITING_KIOSK'||p.state==='WALKING_TO_KIOSK'?'🏧'
-          :p.state==='WAITING_AT_BAR'||p.state==='WALKING_TO_BAR'?'🍺'
-          :p.state==='EATING'?'🍽'
-          :p.state==='LEAVING'?'🚶'
-          :p.state==='WAITING_JACKPOT'?'🏆'
-          :p.state==='WANDERING'?'🔍'
-          :p.state==='WAITING_MACHINE'?'⏳'
-          :p.state==='IDLE_AT_TABLE'?'🃏':null;
+  // State label above head — small text, much easier to read than emoji
+  const stateLabel =
+      p.state==='PLAYING'              ? 'PLAYING'
+    : p.state==='WAITING_CASHIER'      ? 'CASHIER'
+    : p.state==='WALKING_TO_CASHIER'   ? 'CASHIER'
+    : p.state==='WAITING_KIOSK'        ? 'KIOSK'
+    : p.state==='WALKING_TO_KIOSK'     ? 'KIOSK'
+    : p.state==='WAITING_AT_BAR'       ? 'BAR'
+    : p.state==='WALKING_TO_BAR'       ? 'BAR'
+    : p.state==='EATING'               ? 'EATING'
+    : p.state==='LEAVING'              ? 'LEAVE'
+    : p.state==='WAITING_JACKPOT'      ? 'JACKPOT'
+    : p.state==='WANDERING'            ? 'WAIT...'
+    : p.state==='IDLE_AT_TABLE'        ? 'TABLE'
+    : null;
 
-  if(em) {
-    ctx.font='9px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-    ctx.fillText(em,x,y-(p.isHighRoller?20:11));
+  if(stateLabel) {
+    const labelY = y - (p.isHighRoller ? 23 : 14);
+    // Pill background
+    ctx.font = 'bold 6px monospace';
+    const tw = ctx.measureText(stateLabel).width;
+    const px = 3;
+    const rx = x - tw/2 - px, ry = labelY - 7, rw = tw + px*2, rh = 8, rr = 2;
+    ctx.fillStyle = 'rgba(0,0,0,.65)';
+    ctx.beginPath();
+    ctx.moveTo(rx+rr,ry); ctx.lineTo(rx+rw-rr,ry); ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
+    ctx.lineTo(rx+rw,ry+rh-rr); ctx.arcTo(rx+rw,ry+rh,rx+rw-rr,ry+rh,rr);
+    ctx.lineTo(rx+rr,ry+rh); ctx.arcTo(rx,ry+rh,rx,ry+rh-rr,rr);
+    ctx.lineTo(rx,ry+rr); ctx.arcTo(rx,ry,rx+rr,ry,rr);
+    ctx.closePath(); ctx.fill();
+    // Text
+    const labelCol =
+        stateLabel==='JACKPOT' ? '#f0c840'
+      : stateLabel==='LEAVE'   ? '#e07070'
+      : stateLabel==='EATING'  ? '#f0a040'
+      : stateLabel==='WAIT...' ? '#a0a0b0'
+      : stateLabel==='CASHIER'||stateLabel==='KIOSK' ? '#60d0a0'
+      : '#c0d8ff';
+    ctx.fillStyle = labelCol;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(stateLabel, x, labelY - 1);
   }
 
   // Mood dot (tiny coloured pixel top-right of head)

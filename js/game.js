@@ -204,6 +204,23 @@ function endDay(){
   const snapshot = {...G.dayStats, loanPayment};
   const net = snapshot.moneyIn - snapshot.moneyOut - wages - (snapshot.jackpotsPaid||0) - loanPayment;
   G.allTimeProfit = (G.allTimeProfit||0) + net;
+
+  // Record for P&L history (keep last 30 days)
+  if(!G.dayHistory) G.dayHistory = [];
+  G.dayHistory.push({
+    day: G.day - 1,  // day just ended
+    dow: ((G.dayOfWeek??0) + 6) % 7,  // day-of-week that just ended
+    moneyIn:   snapshot.moneyIn,
+    moneyOut:  snapshot.moneyOut,
+    wages:     wages,
+    tips:      snapshot.tips || 0,
+    jackpots:  snapshot.jackpotsPaid || 0,
+    loans:     loanPayment,
+    net:       net,
+    patrons:   snapshot.patronsVisited,
+  });
+  if(G.dayHistory.length > 30) G.dayHistory.shift();
+
   openDayEndModal(wages, snapshot);
   G.dayStats={patronsVisited:0,moneyIn:0,moneyOut:0,wages:0,tips:0,foundMoney:0,jackpotsPaid:0};
 }
@@ -871,7 +888,7 @@ function callPatron(contactId){
     targetX:fp.wx, targetY:fp.wy,
     state:'WALKING',
     machineId:security.id,
-    speed:55,
+    speed:100,
     color:PATRON_COLORS[Math.floor(Math.random()*PATRON_COLORS.length)],
     hairColor:'#3a2808'
   });
@@ -894,6 +911,29 @@ function updateLFVisitors(dt){
   }
 }
 
+// ── Security desk / L&F claim panel ────────
+let _lfClaimVisitorId = null;
+
+function openLFClaimPanel(visitorId) {
+  const v = G.lostAndFoundVisitors.find(v => v.id === visitorId);
+  if(!v) return;
+  _lfClaimVisitorId = visitorId;
+  document.getElementById('lf-claim-name').textContent = v.patronName + ' is waiting';
+  document.getElementById('lf-claim-amount').textContent = '$' + v.amount.toFixed(2);
+  document.getElementById('lf-claim-panel').style.display = 'block';
+}
+
+function closeLFClaimPanel() {
+  document.getElementById('lf-claim-panel').style.display = 'none';
+  _lfClaimVisitorId = null;
+}
+
+function confirmLFClaim() {
+  if(!_lfClaimVisitorId) return;
+  claimFoundMoney(_lfClaimVisitorId);
+  closeLFClaimPanel();
+}
+
 function claimFoundMoney(visitorId){
   const v=G.lostAndFoundVisitors.find(v=>v.id===visitorId);
   if(!v) return;
@@ -911,11 +951,14 @@ function openManagementWindow(){
   const panel=document.getElementById('mgmt-panel');
   panel.style.display='block';
   renderManagementWindow();
-  // Auto-refresh stats while open
+  // Auto-refresh stats and P&L while open
   if(G._mgmtRefreshTimer) clearInterval(G._mgmtRefreshTimer);
   G._mgmtRefreshTimer = setInterval(()=>{
-    if(document.getElementById('mgmt-panel').style.display==='block' && _mgmtTab==='stats')
-      _renderStatsTab(document.getElementById('mgmt-tab-body'));
+    const panel = document.getElementById('mgmt-panel');
+    const tab   = document.getElementById('mgmt-tab-body');
+    if(!panel || panel.style.display!=='block' || !tab) return;
+    if(_mgmtTab==='stats') _renderStatsTab(tab);
+    else if(_mgmtTab==='pnl') _renderPnLTab(tab);
   }, 2000);
 }
 
@@ -932,12 +975,14 @@ function renderManagementWindow() {
   body.innerHTML = `
     <div class="mgmt-tabs">
       <button class="mgmt-tab ${_mgmtTab==='stats'?'active':''}" onclick="_mgmtTab='stats';renderManagementWindow()">📊 Stats</button>
+      <button class="mgmt-tab ${_mgmtTab==='pnl'?'active':''}" onclick="_mgmtTab='pnl';renderManagementWindow()">📈 P&L</button>
       <button class="mgmt-tab ${_mgmtTab==='loans'?'active':''}" onclick="_mgmtTab='loans';renderManagementWindow()">🏦 Loans</button>
       <button class="mgmt-tab ${_mgmtTab==='lf'?'active':''}" onclick="_mgmtTab='lf';renderManagementWindow()">🔍 L&F</button>
     </div>
     <div id="mgmt-tab-body"></div>`;
   const tab = document.getElementById('mgmt-tab-body');
   if(_mgmtTab==='stats') _renderStatsTab(tab);
+  else if(_mgmtTab==='pnl') _renderPnLTab(tab);
   else if(_mgmtTab==='loans') _renderLoansTab(tab);
   else _renderLFTab(tab);
 }
@@ -1010,6 +1055,89 @@ function _renderStatsTab(el) {
       <button class="ctrl-btn ${G.speed===2?'active':''}" onclick="setSpd(2);renderManagementWindow()">2x</button>
       <button class="ctrl-btn ${G.speed===3?'active':''}" onclick="setSpd(3);renderManagementWindow()">3x</button>
     </div>`;
+}
+
+function _renderPnLTab(el) {
+  const hist = G.dayHistory || [];
+  const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  // Summary cards across all recorded days
+  const totalIn     = hist.reduce((s,d)=>s+d.moneyIn,0);
+  const totalOut    = hist.reduce((s,d)=>s+d.moneyOut,0);
+  const totalWages  = hist.reduce((s,d)=>s+d.wages,0);
+  const totalTips   = hist.reduce((s,d)=>s+d.tips,0);
+  const totalJP     = hist.reduce((s,d)=>s+d.jackpots,0);
+  const totalLoans  = hist.reduce((s,d)=>s+d.loans,0);
+  const totalNet    = hist.reduce((s,d)=>s+d.net,0);
+  const avgNet      = hist.length ? totalNet/hist.length : 0;
+
+  const fv = v => (v<0?'-$':'$')+Math.abs(v).toFixed(0);
+  const col = v => v>=0?'#7aba70':'#e07070';
+
+  // Today (live, not yet in history)
+  const ds = G.dayStats;
+  const todayWages = G.employees.reduce((s,e)=>s+EMPLOYEE_DEFS[e.type].wage,0);
+  const todayNet = ds.moneyIn - ds.moneyOut - (ds.jackpotsPaid||0); // wages deducted at day-end
+
+  el.innerHTML = `
+  <div style="padding:2px 0 6px">
+
+    <!-- Summary cards -->
+    <div class="mgmt-section-header">All-Time Summary (${hist.length} days recorded)</div>
+    <div class="mgmt-stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Gross Bets</div><div class="mgmt-stat-val green">$${Math.floor(totalIn).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Payouts</div><div class="mgmt-stat-val red">$${Math.floor(totalOut).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Gross Profit</div><div class="mgmt-stat-val" style="color:${col(totalIn-totalOut)}">${fv(totalIn-totalOut)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Wages</div><div class="mgmt-stat-val red">$${Math.floor(totalWages).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Jackpots</div><div class="mgmt-stat-val red">$${Math.floor(totalJP).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Tips Earned</div><div class="mgmt-stat-val green">$${Math.floor(totalTips).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Loan Payments</div><div class="mgmt-stat-val red">$${Math.floor(totalLoans).toLocaleString()}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Avg / Day</div><div class="mgmt-stat-val" style="color:${col(avgNet)}">${fv(avgNet)}</div></div>
+      <div class="mgmt-stat-box" style="background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.25)"><div class="mgmt-stat-lbl">Net Profit</div><div class="mgmt-stat-val" style="color:${col(totalNet)};font-size:15px">${fv(totalNet)}</div></div>
+    </div>
+
+    <!-- Today live -->
+    <div class="mgmt-section-header" style="margin-top:8px">Today (Live)</div>
+    <div class="mgmt-stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Bets</div><div class="mgmt-stat-val green">$${ds.moneyIn.toFixed(0)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Payouts</div><div class="mgmt-stat-val red">$${ds.moneyOut.toFixed(0)}</div></div>
+      <div class="mgmt-stat-box"><div class="mgmt-stat-lbl">Net so far</div><div class="mgmt-stat-val" style="color:${col(todayNet)}">${fv(todayNet)}</div></div>
+    </div>
+
+    ${hist.length === 0 ? `<div style="color:var(--text-muted);text-align:center;padding:20px;font-size:var(--fs-sm)">No completed days yet.<br>P&L history builds up after each day ends.</div>` : `
+    <!-- Day-by-day table -->
+    <div class="mgmt-section-header" style="margin-top:8px">Daily Breakdown</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead>
+          <tr style="color:var(--text-muted);text-align:right;border-bottom:1px solid rgba(255,255,255,.1)">
+            <th style="text-align:left;padding:4px 3px;font-weight:600">Day</th>
+            <th style="padding:4px 3px">Bets</th>
+            <th style="padding:4px 3px">Payouts</th>
+            <th style="padding:4px 3px">Wages</th>
+            <th style="padding:4px 3px">Tips</th>
+            <th style="padding:4px 3px">Jackpots</th>
+            <th style="padding:4px 3px;font-weight:700">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${[...hist].reverse().map(d=>{
+            const netCol = d.net>=0?'#7aba70':'#e07070';
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,.05);text-align:right">
+              <td style="text-align:left;padding:4px 3px;color:var(--text-muted)">${DOW[d.dow]??''} D${d.day}</td>
+              <td style="padding:4px 3px;color:#7aba70">$${d.moneyIn.toFixed(0)}</td>
+              <td style="padding:4px 3px;color:#e07070">$${d.moneyOut.toFixed(0)}</td>
+              <td style="padding:4px 3px;color:#e07070">$${d.wages.toFixed(0)}</td>
+              <td style="padding:4px 3px;color:#c9a84c">$${d.tips.toFixed(0)}</td>
+              <td style="padding:4px 3px;color:#e07070">$${d.jackpots.toFixed(0)}</td>
+              <td style="padding:4px 3px;font-weight:700;color:${netCol}">${d.net>=0?'+':''}$${d.net.toFixed(0)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}
+
+  </div>`;
 }
 
 function _renderLoansTab(el) {
@@ -1340,6 +1468,7 @@ function saveGame(){
     }));
     localStorage.setItem('casinoEmpireV5',JSON.stringify({
       v:5, money:G.money, totalEarned:G.totalEarned, allTimeProfit:G.allTimeProfit||0, day:G.day,
+      dayHistory:G.dayHistory||[],
       dayOfWeek:G.dayOfWeek??0,
       speed:G.speed, floorLevel:G.floorLevel,
       nextMid:G.nextMid, nextContactId:G.nextContactId,
@@ -1389,6 +1518,7 @@ function loadGame(){
     G.loans=d.loans||[];
     G.nextLoanId=d.nextLoanId||1;
     G.allTimeProfit=d.allTimeProfit||0;
+    G.dayHistory=d.dayHistory||[];
     G.machines=(d.machines||[]).map(m=>({
       ...m,occupied:null,rotation:m.rotation||0,
       upgrades:m.upgrades||{speed:0,luck:0,bet:0},totalEarned:m.totalEarned||0,
@@ -1409,6 +1539,8 @@ function loadGame(){
               p.state==='IDLE_AT_TABLE'||p.state==='PLAYING'||
               p.state==='WANDERING')
               ? 'ENTERING' : p.state,
+      // Upgrade old slow speeds from pre-fix saves
+      speed: Math.max(p.speed||0, 90),
       playTimer:0, spinInterval:0, spinsLeft:0, _won:false,
       _kioskTimer:0, _barId:null, _retryAcc:0, _waitTimer:0,
       _machineVisits:p._machineVisits||{}, _favMachine:p._favMachine||null,
@@ -1425,8 +1557,9 @@ let lastTs=0;
 
 function loop(ts){
   const rawDt=ts-lastTs; lastTs=ts;
-  const dt=Math.min(rawDt,80)*G.speed;
-  const rawDtCap=Math.min(rawDt,80);
+  // Cap at 33ms (≈30fps equivalent) — prevents large position jumps on slow frames
+  const dt=Math.min(rawDt,33)*G.speed;
+  const rawDtCap=Math.min(rawDt,33);
 
   for(const p of [...G.patrons]) updatePatron(p,dt);
   for(const e of G.employees)    updateEmployee(e,dt);

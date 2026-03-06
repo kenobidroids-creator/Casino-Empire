@@ -222,7 +222,7 @@ function _buildRepairGrid() {
       _makeSpark(btn);
     } else {
       btn.textContent = '🔩';
-      btn.addEventListener('click', () => _missClick(btn));
+      btn.onclick = () => _missClick(btn);
     }
     grid.appendChild(btn);
   }
@@ -231,33 +231,33 @@ function _buildRepairGrid() {
 function _makeSpark(btn) {
   btn.textContent = '⚡';
   btn.dataset.spark = '1';
+  btn.disabled = false;
   btn.style.background = 'rgba(240,200,40,.15)';
   btn.style.borderColor = 'rgba(240,200,40,.5)';
   btn.style.transform = 'scale(1.15)';
   setTimeout(() => { btn.style.transform = ''; }, 180);
-  // Remove old listener, add fresh one
-  const newBtn = btn.cloneNode(true);
-  btn.parentNode && btn.parentNode.replaceChild(newBtn, btn);
-  btn = newBtn;
-  // Spark expires after 3s if not clicked — relocates to another cell
-  const expireMs = 2500 + Math.random() * 1500;
-  const t = setTimeout(() => _sparkExpire(newBtn), expireMs);
+  // Attach click listener via onclick so it's always fresh (no stacking)
+  btn.onclick = () => _hitSpark(btn);
+  // Spark expires and relocates if not clicked in time
+  const expireMs = 2800 + Math.random() * 1500;
+  const t = setTimeout(() => _sparkExpire(btn), expireMs);
   _repairSparkTimers.push(t);
-  newBtn.addEventListener('click', () => _hitSpark(newBtn));
 }
 
 function _sparkExpire(btn) {
   if(!btn.isConnected || btn.dataset.spark !== '1') return;
-  // Spark fizzles — turn back to bolt briefly, then relocate
   btn.textContent = '💨';
   btn.dataset.spark = '';
+  btn.onclick = null;
   btn.style.background = 'rgba(180,100,40,.1)';
   btn.style.borderColor = 'rgba(180,100,40,.3)';
   setTimeout(() => {
+    if(!btn.isConnected) return;
     btn.textContent = '🔩';
+    btn.dataset.spark = '';
     btn.style.background = 'rgba(255,255,255,.05)';
     btn.style.borderColor = 'rgba(255,255,255,.1)';
-    // Light up a new random empty cell
+    btn.onclick = () => _missClick(btn);
     if(_repairMid) _addNewSparks(1);
   }, 400);
 }

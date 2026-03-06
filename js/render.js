@@ -39,20 +39,20 @@ function resize() {
 
 function clampCam() {
   const hotH = parseInt(getComputedStyle(document.getElementById('hotbar')).height)||96;
-  const hudH = 52;
   const WW = (G.floorW+2*WALL)*TILE, WH = (G.floorH+2*WALL)*TILE;
 
-  // Standard bounds: camera.x/y are the world-origin screen offset
-  // Positive camera = world shifted right/down (see north/west content)
-  // Negative camera = world shifted left/up  (see south/east content)
-  const stdMinY = canvas.height - hotH - WH;  // most negative = fully scrolled south
-  const stdMaxY = hudH;                         // most positive = fully scrolled north
+  // Horizontal: when world wider than screen, allow scrolling through it.
+  // When world narrower, allow centering with small slack.
+  const minX = Math.min(0, canvas.width - WW);   // most-left pan (negative when WW>viewport)
+  const maxX = Math.max(0, canvas.width - WW);   // most-right pan (positive when WW<viewport)
+  const overX = TILE * 2;  // small overshoot so edge wall isn't hard-cut
+  G.camera.x = Math.max(minX - overX, Math.min(maxX + overX, G.camera.x));
 
-  // Allow extra scroll south so parking lot is visible below building
+  // Vertical: standard bounds + extra southward travel to reveal parking lot
+  const minY = canvas.height - hotH - WH;
+  const maxY = 52;  // HUD height — don't scroll building above it
   const extraDown = TILE * 6;
-
-  G.camera.x = Math.max(canvas.width - WW - WW*0.15, Math.min(WW*0.15, G.camera.x));
-  G.camera.y = Math.max(stdMinY - extraDown, Math.min(stdMaxY, G.camera.y));
+  G.camera.y = Math.max(minY - extraDown, Math.min(maxY, G.camera.y));
 }
 
 // ─────────────────────────────────────────
@@ -318,14 +318,19 @@ function drawLFVisitor(v) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(v.patronName, x, y+2);
 
-  // If waiting at desk, show pulsing indicator
+  // If waiting at desk, show pulsing indicator + tap prompt
   if(v.state === 'WAITING') {
     const pulse = 0.6 + 0.4*Math.sin(Date.now() * 0.005);
     ctx.strokeStyle = `rgba(80,220,80,${pulse})`;
     ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(x, y-14, 10, 0, Math.PI*2); ctx.stroke();
-    ctx.fillStyle = `rgba(80,220,80,${pulse*0.4})`;
-    ctx.beginPath(); ctx.arc(x, y-14, 10, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y-14, 12, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = `rgba(80,220,80,${pulse*0.35})`;
+    ctx.beginPath(); ctx.arc(x, y-14, 12, 0, Math.PI*2); ctx.fill();
+    // Tap label
+    ctx.font = 'bold 6px monospace';
+    ctx.fillStyle = '#50e050';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('TAP TO CLAIM', x, y - 28);
   }
 }
 
@@ -487,42 +492,59 @@ function drawParkingCars(cx, cy, bw, bh) {
 
 function _drawPixelCar(sx, sy, color, facing, alpha) {
   ctx.globalAlpha = alpha;
-  const w = 28, h = 16;
-  // facing 0=right, 1=left, 2=down, 3=up (screen coords)
+  // facing 0=right, 1=left, 2=down, 3=up — top-down view, car rotated to face direction
   ctx.save();
   ctx.translate(sx, sy);
-  if      (facing === 1) ctx.scale(-1, 1);
-  else if (facing === 2) { ctx.rotate(Math.PI/2); }
-  else if (facing === 3) { ctx.rotate(-Math.PI/2); }
+  const rot = [0, Math.PI, Math.PI/2, -Math.PI/2][facing] || 0;
+  ctx.rotate(rot);
 
-  // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,.35)';
-  ctx.beginPath(); ctx.ellipse(0, 3, w * 0.55, 4, 0, 0, Math.PI*2); ctx.fill();
+  const cl = 26;  // car length (front→back in local x)
+  const cw = 14;  // car width  (side-to-side in local y)
+  const x = -cl/2, y = -cw/2;
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(1, 2, cl*0.48, cw*0.46, 0, 0, Math.PI*2); ctx.fill();
 
   // Body
   ctx.fillStyle = color;
-  ctx.fillRect(-w/2, -h/2, w, h);
-  // Roof
-  ctx.fillStyle = shadecol(color, 30);
-  ctx.fillRect(-w/2+5, -h/2-5, w-10, h/2+2);
-  // Windows
-  ctx.fillStyle = 'rgba(120,200,255,.55)';
-  ctx.fillRect(-w/2+6, -h/2-4, 7, h/2+1);
-  ctx.fillRect(w/2-12, -h/2-4, 7, h/2+1);
-  // Headlights
-  ctx.fillStyle = '#ffe888';
-  ctx.fillRect(w/2-3, -h/2+2, 3, 4);
-  ctx.fillRect(w/2-3, h/2-6,  3, 4);
-  // Taillights
-  ctx.fillStyle = '#ff4444';
-  ctx.fillRect(-w/2, -h/2+2, 3, 4);
-  ctx.fillRect(-w/2,  h/2-6, 3, 4);
-  // Wheels
-  ctx.fillStyle = '#222';
-  ctx.fillRect(-w/2+3, -h/2-3, 6, 3);
-  ctx.fillRect(w/2-9,  -h/2-3, 6, 3);
-  ctx.fillRect(-w/2+3,  h/2,   6, 3);
-  ctx.fillRect(w/2-9,   h/2,   6, 3);
+  ctx.beginPath();
+  ctx.moveTo(x+3, y); ctx.lineTo(x+cl-3, y); ctx.arcTo(x+cl, y, x+cl, y+3, 3);
+  ctx.lineTo(x+cl, y+cw-3); ctx.arcTo(x+cl, y+cw, x+cl-3, y+cw, 3);
+  ctx.lineTo(x+3, y+cw); ctx.arcTo(x, y+cw, x, y+cw-3, 3);
+  ctx.lineTo(x, y+3); ctx.arcTo(x, y, x+3, y, 3);
+  ctx.closePath(); ctx.fill();
+
+  // Roof (darker tinted centre panel)
+  ctx.fillStyle = shadecol(color, -18);
+  ctx.fillRect(x+7, y+2, cl-14, cw-4);
+
+  // Windshield (front — right side in local coords)
+  ctx.fillStyle = 'rgba(170,225,255,.72)';
+  ctx.fillRect(x+cl-8, y+2, 5, cw-4);
+
+  // Rear window (back — left side in local coords)
+  ctx.fillStyle = 'rgba(120,180,220,.45)';
+  ctx.fillRect(x+3, y+2, 4, cw-4);
+
+  // Headlights — front corners
+  ctx.fillStyle = '#ffe87a';
+  ctx.fillRect(x+cl-3, y+1,       3, 3);
+  ctx.fillRect(x+cl-3, y+cw-4,    3, 3);
+
+  // Taillights — rear corners
+  ctx.fillStyle = '#ff3030';
+  ctx.fillRect(x, y+1,       3, 3);
+  ctx.fillRect(x, y+cw-4,    3, 3);
+
+  // Wheels — four corners, dark rects sticking outside body
+  ctx.fillStyle = '#181818';
+  // front pair
+  ctx.fillRect(x+cl-8, y-2,   6, 3);
+  ctx.fillRect(x+cl-8, y+cw-1, 6, 3);
+  // rear pair
+  ctx.fillRect(x+2,    y-2,   6, 3);
+  ctx.fillRect(x+2,    y+cw-1, 6, 3);
 
   ctx.restore();
   ctx.globalAlpha = 1;

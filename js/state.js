@@ -72,6 +72,9 @@ const G = {
   // Loan system
   loans:[], nextLoanId:1,
   allTimeProfit:0,   // running total of net profit across all days
+
+  // Per-day history for P&L report (last 30 days)
+  dayHistory:[],
 };
 
 // Loan system state (appended by chunk 3)

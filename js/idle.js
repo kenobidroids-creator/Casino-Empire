@@ -26,19 +26,19 @@ function checkIdleReturn() {
   const earnSummary = {};
   let totalEarned   = 0;
 
-  // Slots
+  // Slots — use actual net house edge so idle matches active play
   let slotEarn = 0;
   for(const m of slots) {
     const def = MACHINE_DEFS[m.type];
-    const edge = def.houseEdge||0.25;
-    // avg spins per minute × bet midpoint × edge × elapsed minutes × idle rate
-    const minsElapsed = elapsed/60000;
-    const spinsPerMin = 60000/def.playTime;
-    const betMid = (def.betMin+def.betMax)/2 * (1+(m.upgrades?.bet||0)*.25);
-    const earn   = spinsPerMin * betMid * edge * minsElapsed * IDLE_RATE;
+    const edge = def.houseEdge || 0.30;
+    const minsElapsed = elapsed / 60000;
+    const spinsPerMin = 60000 / def.playTime;
+    const betMid = (def.betMin + def.betMax) / 2 * (1 + (m.upgrades?.bet||0) * .25);
+    // Net = bet × edge (already accounts for payouts)
+    const earn = spinsPerMin * betMid * edge * minsElapsed * IDLE_RATE;
     slotEarn += earn;
   }
-  if(slotEarn>0) { earnSummary['Slot Machines']= slotEarn; totalEarned+=slotEarn; }
+  if(slotEarn > 0) { earnSummary['Slot Machines'] = slotEarn; totalEarned += slotEarn; }
 
   // Tables
   let tableEarn=0;
