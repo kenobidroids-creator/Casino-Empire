@@ -451,127 +451,157 @@ function drawMachineOverlays(m,def,sp,pw,ph) {
 }
 
 // ── Draw Patron ────────────────────────────
+// ── Patron Sprite Sheet ──────────────────────
+const PSHEET = {
+  CELL_W:100, CELL_H:105, FRAMES:4,
+  VARIANTS:{ GREEN:0, PURPLE:400, ORANGE:800, RED:1200 },
+  DIRS:{ S:0, SW:1, W:2, NW:3, N:4, NE:5, E:6, SE:7 },
+  IDLE_ROW:8, FRAME_MS:150
+};
+let _pImg=null, _pReady=false;
+(function loadPatronSheet(){
+  _pImg=new Image();
+  _pImg.onload=()=>{ _pReady=true; };
+  _pImg.onerror=()=>{ _pReady=false; };
+  _pImg.src='patron_sprites_ALL.png';
+})();
+
+function _pDir(dx,dy){
+  if(Math.abs(dx)<0.5&&Math.abs(dy)<0.5) return null;
+  const a=Math.atan2(dy,dx)*180/Math.PI;
+  if(a>-22.5&&a<=22.5)   return 'E';
+  if(a>22.5&&a<=67.5)    return 'SE';
+  if(a>67.5&&a<=112.5)   return 'S';
+  if(a>112.5&&a<=157.5)  return 'SW';
+  if(a>157.5||a<=-157.5) return 'W';
+  if(a>-157.5&&a<=-112.5)return 'NW';
+  if(a>-112.5&&a<=-67.5) return 'N';
+  return 'NE';
+}
+function _pVariant(p){
+  if(p.isHighRoller) return 'RED';
+  return ['GREEN','PURPLE','ORANGE'][p.id%3];
+}
+
 function drawPatron(p) {
   const sp=w2s(p.wx,p.wy);
-  const x=sp.x, y=sp.y, r=10;
+  const x=sp.x, y=sp.y;
 
-  // Delivery highlight ring (drawn first, behind patron)
-  if(typeof _highlightPid !== 'undefined' && _highlightPid === p.id) {
-    const pulse = 0.5 + 0.5*Math.sin(Date.now()*0.008);
-    ctx.strokeStyle = `rgba(80,220,120,${0.6+pulse*0.4})`;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.arc(x, y-4, 16+pulse*3, 0, Math.PI*2); ctx.stroke();
-    ctx.fillStyle = `rgba(80,220,120,${0.1+pulse*0.08})`;
-    ctx.beginPath(); ctx.arc(x, y-4, 16+pulse*3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#50e078'; ctx.font = 'bold 7px monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText('DELIVER', x, y-24);
+  // Delivery highlight ring
+  if(typeof _highlightPid!=='undefined'&&_highlightPid===p.id){
+    const pulse=0.5+0.5*Math.sin(Date.now()*0.008);
+    ctx.strokeStyle=`rgba(80,220,120,${0.6+pulse*0.4})`;
+    ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(x,y-4,16+pulse*3,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=`rgba(80,220,120,${0.1+pulse*0.08})`;
+    ctx.beginPath();ctx.arc(x,y-4,16+pulse*3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#50e078';ctx.font='bold 7px monospace';
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('DELIVER',x,y-24);
   }
 
   // Shadow
   ctx.fillStyle='rgba(0,0,0,.25)';
-  ctx.beginPath(); ctx.ellipse(x,y+r+1,r*.8,2.5,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath();ctx.ellipse(x,y+4,7,2.5,0,0,Math.PI*2);ctx.fill();
 
-  // Body — pixel-art style character
-  // Legs
-  ctx.fillStyle=shadecol(p.color,-30);
-  ctx.fillRect(x-5,y+5,4,7);
-  ctx.fillRect(x+1,y+5,4,7);
-  // Torso
-  ctx.fillStyle=p.color;
-  ctx.fillRect(x-5,y-3,10,9);
-  // Head
-  ctx.fillStyle='#f0c890';
-  ctx.fillRect(x-4,y-10,8,8);
-  // Hair
-  ctx.fillStyle=p.hairColor||'#3a2808';
-  ctx.fillRect(x-4,y-10,8,3);
-  // Eyes
-  ctx.fillStyle='#1a1a1a';
-  ctx.fillRect(x-2,y-7,2,2);
-  ctx.fillRect(x+1,y-7,2,2);
-
-  // High roller crown 👑
-  if(p.isHighRoller) {
-    ctx.font='9px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-    ctx.fillText('👑',x,y-10);
+  if(_pReady) {
+    // ── Sprite sheet rendering ──
+    const now=Date.now();
+    const dx=p.targetX-p.wx, dy=p.targetY-p.wy;
+    const moving=Math.hypot(dx,dy)>1;
+    if(moving){
+      const d=_pDir(dx,dy);
+      if(d) p._spriteDir=d;
+      if(!p._spriteFrameT) p._spriteFrameT=now;
+      p._spriteFrame=Math.floor((now-p._spriteFrameT)/PSHEET.FRAME_MS)%PSHEET.FRAMES;
+    } else {
+      p._spriteFrame=Math.floor(now/600)%PSHEET.FRAMES;
+      p._spriteFrameT=null;
+    }
+    const dir=p._spriteDir||'S';
+    const varX=PSHEET.VARIANTS[_pVariant(p)];
+    const row=moving?PSHEET.DIRS[dir]:PSHEET.IDLE_ROW;
+    const srcX=varX+(p._spriteFrame*PSHEET.CELL_W);
+    const srcY=row*PSHEET.CELL_H;
+    // Scale: display characters at ~20px tall (sprite is 105px)
+    const scale=20/105;
+    const dw=PSHEET.CELL_W*scale, dh=PSHEET.CELL_H*scale;
+    ctx.drawImage(_pImg, srcX,srcY,PSHEET.CELL_W,PSHEET.CELL_H,
+                  x-dw/2, y-dh*0.85, dw, dh);
+  } else {
+    // ── Procedural fallback ──
+    ctx.fillStyle=shadecol(p.color,-30);
+    ctx.fillRect(x-5,y+5,4,7);ctx.fillRect(x+1,y+5,4,7);
+    ctx.fillStyle=p.color;ctx.fillRect(x-5,y-3,10,9);
+    ctx.fillStyle='#f0c890';ctx.fillRect(x-4,y-10,8,8);
+    ctx.fillStyle=p.hairColor||'#3a2808';ctx.fillRect(x-4,y-10,8,3);
+    ctx.fillStyle='#1a1a1a';ctx.fillRect(x-2,y-7,2,2);ctx.fillRect(x+1,y-7,2,2);
   }
 
-  // State label above head — small text, much easier to read than emoji
-  const stateLabel =
-      p.state==='PLAYING'              ? 'PLAYING'
-    : p.state==='WAITING_CASHIER'      ? 'CASHIER'
-    : p.state==='WALKING_TO_CASHIER'   ? 'CASHIER'
-    : p.state==='WAITING_KIOSK'        ? 'KIOSK'
-    : p.state==='WALKING_TO_KIOSK'     ? 'KIOSK'
-    : p.state==='WAITING_AT_BAR'       ? 'BAR'
-    : p.state==='WALKING_TO_BAR'       ? 'BAR'
-    : p.state==='EATING'               ? 'EATING'
-    : p.state==='LEAVING'              ? 'LEAVE'
-    : p.state==='WAITING_JACKPOT'      ? 'JACKPOT'
-    : p.state==='WANDERING'            ? 'WAIT...'
-    : p.state==='IDLE_AT_TABLE'        ? 'TABLE'
-    : null;
+  // High roller crown
+  if(p.isHighRoller){ctx.font='9px serif';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('👑',x,y-(_pReady?18:10));}
 
-  if(stateLabel) {
-    const labelY = y - (p.isHighRoller ? 23 : 14);
-    // Pill background
-    ctx.font = 'bold 6px monospace';
-    const tw = ctx.measureText(stateLabel).width;
-    const px = 3;
-    const rx = x - tw/2 - px, ry = labelY - 7, rw = tw + px*2, rh = 8, rr = 2;
-    ctx.fillStyle = 'rgba(0,0,0,.65)';
+  // State label pill
+  const stateLabel=
+      p.state==='PLAYING'           ?'PLAYING'
+    :p.state==='WAITING_CASHIER'    ?'CASHIER'
+    :p.state==='WALKING_TO_CASHIER' ?'CASHIER'
+    :p.state==='WAITING_KIOSK'      ?'KIOSK'
+    :p.state==='WALKING_TO_KIOSK'   ?'KIOSK'
+    :p.state==='WAITING_AT_BAR'     ?'BAR'
+    :p.state==='WALKING_TO_BAR'     ?'BAR'
+    :p.state==='EATING'             ?'EATING'
+    :p.state==='LEAVING'            ?'LEAVE'
+    :p.state==='WAITING_JACKPOT'    ?'JACKPOT'
+    :p.state==='WANDERING'          ?'WAIT...'
+    :p.state==='IDLE_AT_TABLE'      ?'TABLE'
+    :null;
+
+  if(stateLabel){
+    const labelY=y-(p.isHighRoller?(_pReady?32:23):(_pReady?24:14));
+    ctx.font='bold 6px monospace';
+    const tw=ctx.measureText(stateLabel).width;
+    const px2=3, rx=x-tw/2-px2, ry=labelY-7, rw=tw+px2*2, rh=8, rr=2;
+    ctx.fillStyle='rgba(0,0,0,.65)';
     ctx.beginPath();
-    ctx.moveTo(rx+rr,ry); ctx.lineTo(rx+rw-rr,ry); ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
-    ctx.lineTo(rx+rw,ry+rh-rr); ctx.arcTo(rx+rw,ry+rh,rx+rw-rr,ry+rh,rr);
-    ctx.lineTo(rx+rr,ry+rh); ctx.arcTo(rx,ry+rh,rx,ry+rh-rr,rr);
-    ctx.lineTo(rx,ry+rr); ctx.arcTo(rx,ry,rx+rr,ry,rr);
-    ctx.closePath(); ctx.fill();
-    // Text
-    const labelCol =
-        stateLabel==='JACKPOT' ? '#f0c840'
-      : stateLabel==='LEAVE'   ? '#e07070'
-      : stateLabel==='EATING'  ? '#f0a040'
-      : stateLabel==='WAIT...' ? '#a0a0b0'
-      : stateLabel==='CASHIER'||stateLabel==='KIOSK' ? '#60d0a0'
-      : '#c0d8ff';
-    ctx.fillStyle = labelCol;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(stateLabel, x, labelY - 1);
+    ctx.moveTo(rx+rr,ry);ctx.lineTo(rx+rw-rr,ry);ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
+    ctx.lineTo(rx+rw,ry+rh-rr);ctx.arcTo(rx+rw,ry+rh,rx+rw-rr,ry+rh,rr);
+    ctx.lineTo(rx+rr,ry+rh);ctx.arcTo(rx,ry+rh,rx,ry+rh-rr,rr);
+    ctx.lineTo(rx,ry+rr);ctx.arcTo(rx,ry,rx+rr,ry,rr);
+    ctx.closePath();ctx.fill();
+    const labelCol=stateLabel==='JACKPOT'?'#f0c840':stateLabel==='LEAVE'?'#e07070':stateLabel==='EATING'?'#f0a040':stateLabel==='WAIT...'?'#a0a0b0':stateLabel==='CASHIER'||stateLabel==='KIOSK'?'#60d0a0':'#c0d8ff';
+    ctx.fillStyle=labelCol;ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    ctx.fillText(stateLabel,x,labelY-1);
   }
 
-  // Mood dot (tiny coloured pixel top-right of head)
+  // Mood dot
   const mood=p._mood!=null?p._mood:100;
   ctx.fillStyle=mood>66?'#50e050':mood>33?'#e0c040':'#e04040';
-  ctx.fillRect(x+5,y-12,3,3);
+  ctx.fillRect(x+(_pReady?8:5),y-(_pReady?22:12),3,3);
 
   // Eating progress bar
-  if(p.state==='EATING' && p.eatTimer!=null) {
-    const EAT_TOTAL = 4000;
-    const pct = Math.max(0, Math.min(1, p.eatTimer / EAT_TOTAL));
-    const bw = 22, bh = 4;
-    const bx = x - bw/2, by = y + 14;
-    ctx.fillStyle = 'rgba(0,0,0,.5)';
-    ctx.fillRect(bx-1, by-1, bw+2, bh+2);
-    ctx.fillStyle = '#e07030';
-    ctx.fillRect(bx, by, bw * pct, bh);
-    ctx.font = '6px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.fillStyle='rgba(255,255,255,.7)';
-    ctx.fillText('🍽', x, by+bh+1);
+  if(p.state==='EATING'&&p.eatTimer!=null){
+    const EAT_TOTAL=4000;
+    const pct=Math.max(0,Math.min(1,p.eatTimer/EAT_TOTAL));
+    const bw=22,bh=4,bx=x-bw/2,by=y+14;
+    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(bx-1,by-1,bw+2,bh+2);
+    ctx.fillStyle='#e07030';ctx.fillRect(bx,by,bw*pct,bh);
+    ctx.font='6px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillStyle='rgba(255,255,255,.7)';ctx.fillText('🍽',x,by+bh+1);
   }
 
   // Ticket value
-  if(p.ticketValue>0&&p.state!=='PLAYING') {
+  if(p.ticketValue>0&&p.state!=='PLAYING'){
     ctx.fillStyle=p.isHighRoller?'#f0d060':'#8ad070';
     ctx.font=`bold ${p.isHighRoller?8:7}px monospace`;
-    ctx.textAlign='center'; ctx.textBaseline='bottom';
-    ctx.fillText('$'+p.ticketValue.toFixed(2),x,y-21);
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('$'+p.ticketValue.toFixed(2),x,y-(_pReady?26:21));
   }
 
   // Name
   ctx.fillStyle=p.isHighRoller?'rgba(240,210,80,.7)':'rgba(255,255,255,.45)';
-  ctx.font='6px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillText(p.name,x,y+r+3);
+  ctx.font='6px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(p.name,x,y+(_pReady?4:11));
 }
 
 // ── Draw Employee ──────────────────────────

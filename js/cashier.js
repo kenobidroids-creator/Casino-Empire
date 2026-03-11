@@ -149,14 +149,8 @@ function finalizePayment() {
     }
   }
 
-  // No more patrons — show idle state, don't close
-  document.getElementById('cpat-name').textContent='No patrons waiting';
-  document.getElementById('ctick').textContent='$0.00';
-  const tw = document.getElementById('till-wrap');
-  if(tw) tw.style.display='none';
-  document.getElementById('pay-area').innerHTML='<span class="pay-placeholder">Queue is clear</span>';
-  document.getElementById('pay-total').textContent='';
-  document.getElementById('queue-info').textContent='Cashier is idle';
+  // No more patrons — auto-close the panel (queue is fully served)
+  closeCashierPanel();
   updateCashierAlert();
 }
 
