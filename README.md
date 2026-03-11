@@ -285,7 +285,6 @@ If you're testing the game and want to give useful feedback, here's what to look
 
 ## Future Features (Planned)
 
-- Full tutorial / guided new player experience with a simulated run
 - Spritesheet integration (Kenney + LimeZu assets replacing drawn shapes)
 - Card art integration for table game panels
 - Reputation system affecting patron quality and frequency
