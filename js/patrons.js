@@ -80,7 +80,7 @@ function updatePatron(p,dt) {
       break; // idle
     case 'WANDERING':
       movePatron(p,dt); // walk to wander target
-      p._mood = Math.max(0, p._mood - dt*0.002);
+      p._mood = Math.max(0, p._mood - dt*0.005);
       p._waitTimer -= dt;
       if(p._waitTimer <= 0) {
         // Patience expired — leave frustrated
@@ -178,9 +178,9 @@ function assignMachine(p) {
     } else {
       // Nothing free at all — wander and keep checking
       p.state = 'WANDERING';
-      p._waitTimer = 12000 + Math.random() * 10000;
+      p._waitTimer = 6000 + Math.random() * 6000;
       p._retryAcc = 0;
-      p._mood = Math.max(50, p._mood - 8);
+      p._mood = Math.max(50, p._mood - 12);
       p._thought = pickThought(p, 'full');
       _pickWanderTarget(p);
       return;
@@ -199,7 +199,7 @@ function assignMachine(p) {
   if (!candidates.length) {
     if (slots.length > 0 || allEntertainment.length > 0) {
       p.state = 'WANDERING';
-      p._waitTimer = 16000 + Math.random() * 10000;
+      p._waitTimer = 8000 + Math.random() * 8000;
       p._retryAcc = 0;
       p._thought = pickThought(p, 'full');
       _pickWanderTarget(p);
@@ -222,7 +222,7 @@ function assignMachine(p) {
   if (!best) {
     // Candidates exist but all occupied — wander
     p.state = 'WANDERING';
-    p._waitTimer = 8000 + Math.random() * 6000;
+    p._waitTimer = 4000 + Math.random() * 4000;
     p._retryAcc = 0;
     p._thought = pickThought(p, 'full');
     _pickWanderTarget(p);
@@ -248,7 +248,7 @@ function assignMachine(p) {
       (p2.state==='WALKING_TO_TABLE'||p2.state==='IDLE_AT_TABLE')
     ).length;
     if(alreadyHere>=totalSeats){
-      p.state='WANDERING'; p._waitTimer=14000; p._retryAcc=0;
+      p.state='WANDERING'; p._waitTimer=7000; p._retryAcc=0;
       p._thought=pickThought(p,'full');
       _pickWanderTarget(p);
       return;

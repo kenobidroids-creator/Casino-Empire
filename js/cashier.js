@@ -5,6 +5,12 @@
 function updateCashierAlert() {
   const open = document.getElementById('cashier-panel').style.display==='block';
   const waiting = G.cashierQueue.length;
+
+  // If panel is open but idle, and someone just arrived, refresh it to serve them
+  if(open && !G.cashierServing && waiting > 0) {
+    openCashierPanel();
+  }
+
   if(waiting > 0 && !open) {
     const cashier = G.machines.find(m=>m.type==='cashier');
     const msg = waiting===1 ? '1 patron at cashier' : `${waiting} patrons at cashier`;
