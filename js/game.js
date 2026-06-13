@@ -1636,11 +1636,24 @@ function loop(ts){
   );
 
   G.spawnAcc+=dt;
-  const slotCt=G.machines.filter(m=>MACHINE_DEFS[m.type].isSlot).length;
   const spawnMult = getSpawnMultiplier();
 
+  // Dynamic capacity: how many patrons can the casino actually handle?
+  let totalCapacity = 0;
+  let slotCt = 0;
+  for(const m of G.machines) {
+    const def = MACHINE_DEFS[m.type];
+    if(!def) continue;
+    if(def.isSlot) { totalCapacity += 1; slotCt++; }
+    else if(def.isTable) totalCapacity += (def.seats || 4);
+    else if(def.isBar) totalCapacity += 5;
+    else if(def.isBand) totalCapacity += 8;
+    else if(def.isSportsbook) totalCapacity += 8;
+  }
+
   // Cap scales with time+day: busier periods allow more patrons on floor
-  const baseCap = 18;
+  // baseCap is total capacity + a small buffer for wandering/queueing
+  const baseCap = Math.max(8, totalCapacity + 4);
   const cap = Math.max(6, Math.floor(baseCap * spawnMult));
 
   // Delay: only speed up during peak (mult>1), never slow below 80% of base rate
