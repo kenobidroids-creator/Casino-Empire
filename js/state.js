@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════
 
 const G = {
-  money:5000, totalEarned:0, day:1, speed:1,
+  money:5000, totalEarned:0, day:1, speed:1, gameTime:0,
   dayOfWeek:0,  // 0=Mon … 6=Sun, start on Monday so players see the full week
   floorLevel:0,   // index into FLOOR_LEVELS
   floorW:FLOOR_LEVELS[0].w,

@@ -57,7 +57,6 @@ function updatePatron(p,dt) {
     case 'WALKING_TO_BAR':
     case 'WALKING_TO_TABLE':
     case 'LEAVING':
-    case 'WANDERING':
       movePatron(p,dt); break;
     case 'PLAYING':
       updatePlaying(p,dt); break;
@@ -407,7 +406,7 @@ function doSpin(p) {
   m.totalEarned=(m.totalEarned||0)+bet;
   G.dayStats.moneyIn+=bet;
   trackRev(bet);
-  m._flash=Date.now(); m._flashTxt='+$'+bet.toFixed(2);
+  m._flash=G.gameTime; m._flashTxt='+$'+bet.toFixed(2);
 
   // Very small chance to drop money near machine during play (1 in 200 spins)
   if(Math.random()<0.005) dropMoneyNear(m,p);
@@ -475,6 +474,10 @@ function finishPlaying(p) {
 }
 
 function afterPlayment(p) {
+  if(p.ticketValue > 0) {
+    routeToPayment(p);
+    return;
+  }
   if(p.wantsFood&&!p.foodState) {
     const bar=G.machines.find(m=>m.type==='bar');
     if(bar){routeToBar(p,bar);return;}
@@ -664,7 +667,7 @@ function kickOut(p) {
 function movePatron(p,dt) {
   const dx=p.targetX-p.wx, dy=p.targetY-p.wy;
   const dist=Math.sqrt(dx*dx+dy*dy);
-  const step=p.speed*dt/1000;
+  const step=p.speed*(p._speedMult||1.0)*dt/1000;
   if(dist<=step+.5) {
     p.wx=p.targetX; p.wy=p.targetY;
     onPatronArrival(p);
@@ -693,6 +696,9 @@ function onPatronArrival(p) {
       break;
     case 'WALKING_TO_TABLE':
       p.state='IDLE_AT_TABLE';
+      break;
+    case 'WANDERING':
+      _pickWanderTarget(p);
       break;
     case 'LEAVING':
       // Patron has reached the exit — remove from world

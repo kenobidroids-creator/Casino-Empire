@@ -242,7 +242,7 @@ function drawDroppedMoney(d) {
 
 function drawTip(t) {
   const sp = w2s(t.wx, t.wy);
-  const pulse = 0.8 + 0.2*Math.sin(Date.now()*0.007);
+  const pulse = 0.8 + 0.2*Math.sin(G.gameTime*0.007);
   const x = sp.x, y = sp.y;
 
   // Drop shadow for legibility
@@ -276,7 +276,7 @@ function drawJackpotFlash(j) {
   if(!m) return;
   const wp=tile2world(m.tx,m.ty), sp=w2s(wp.x,wp.y);
   const def=MACHINE_DEFS[m.type];
-  const t=Date.now()/200;
+  const t=G.gameTime/200;
   const a=.4+.4*Math.abs(Math.sin(t));
   ctx.fillStyle=`rgba(255,220,0,${a})`;
   ctx.fillRect(sp.x-4,sp.y-4,def.w*TILE+8,def.h*TILE+8);
@@ -364,7 +364,7 @@ function drawLFVisitor(v) {
 
   // If waiting at desk, show pulsing indicator + tap prompt
   if(v.state === 'WAITING') {
-    const pulse = 0.6 + 0.4*Math.sin(Date.now() * 0.005);
+    const pulse = 0.6 + 0.4*Math.sin(G.gameTime * 0.005);
     ctx.strokeStyle = `rgba(80,220,80,${pulse})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x, y-14, 12, 0, Math.PI*2); ctx.stroke();

@@ -730,7 +730,7 @@ function drawMoneyFeedCanvas(d){
   }
 
   // Coin pulsing
-  const pulse=.7+.3*Math.sin(Date.now()*.006);
+  const pulse=.7+.3*Math.sin(G.gameTime*.006);
   const cx2=W/2, cy2=H/2;
   mc.shadowColor='#d4a820'; mc.shadowBlur=8*pulse;
   mc.fillStyle='#d4a820';
@@ -1616,7 +1616,7 @@ function loop(ts){
   for(const e of G.employees)    updateEmployee(e,dt);
   updateFoodOrders(dt);
   updateMachineReels(dt);
-  updateMgReels(rawDtCap);
+  updateMgReels(dt);
   updateLFVisitors(dt);
   updateSpecialMachines(dt);
   maybeSpawnLFWalkin();
@@ -1635,6 +1635,7 @@ function loop(ts){
       (p.state==='WAITING_CASHIER'||p.state==='WALKING_TO_CASHIER'))
   );
 
+  G.gameTime += dt;
   G.spawnAcc+=dt;
   const spawnMult = getSpawnMultiplier();
 
@@ -1663,7 +1664,7 @@ function loop(ts){
 
   if(G.spawnAcc>=spawnDelay && G.patrons.length<cap){G.spawnAcc=0;spawnPatron();}
 
-  G.dayAcc+=rawDt;
+  G.dayAcc+=dt;
   if(G.dayAcc>=G.dayLen){G.dayAcc=0;endDay();}
 
   G.autosaveAcc+=rawDt;
