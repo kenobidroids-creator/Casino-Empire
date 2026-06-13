@@ -23,7 +23,7 @@ function spawnPatron() {
     wx:wp.x+TILE/2, wy:wp.y+TILE/2+TILE*1.3,
     state:'ENTERING',
     targetX:wp.x+TILE/2, targetY:wp.y+TILE/2,
-    speed:90+Math.random()*50,
+    speed:110+Math.random()*50,
     machineId:null, ticketValue:0, ticketPaid:false,
     // High rollers have 5–15× normal budget
     budget: isHighRoller
@@ -89,10 +89,10 @@ function updatePatron(p,dt) {
         kickOut(p);
         break;
       }
-      // Retry assignment every 3 seconds
+      // Retry assignment every 1.5 seconds
       if(!p._retryAcc) p._retryAcc = 0;
       p._retryAcc += dt;
-      if(p._retryAcc >= 3000) {
+      if(p._retryAcc >= 1500) {
         p._retryAcc = 0;
         assignMachine(p);
         if(p.state !== 'WANDERING') break; // got assigned, stop wandering
@@ -101,10 +101,6 @@ function updatePatron(p,dt) {
       if(Math.hypot(p.wx-p.targetX, p.wy-p.targetY) < 8) {
         _pickWanderTarget(p);
       }
-      break;
-    case 'WAITING_MACHINE': // legacy compat
-      p.state = 'WANDERING';
-      _pickWanderTarget(p);
       break;
     case 'WAITING_KIOSK':
       p._kioskTimer-=dt;
@@ -182,7 +178,7 @@ function assignMachine(p) {
     } else {
       // Nothing free at all — wander and keep checking
       p.state = 'WANDERING';
-      p._waitTimer = 20000 + Math.random() * 15000;
+      p._waitTimer = 12000 + Math.random() * 10000;
       p._retryAcc = 0;
       p._mood = Math.max(50, p._mood - 8);
       p._thought = pickThought(p, 'full');
@@ -226,7 +222,7 @@ function assignMachine(p) {
   if (!best) {
     // Candidates exist but all occupied — wander
     p.state = 'WANDERING';
-    p._waitTimer = 14000 + Math.random() * 8000;
+    p._waitTimer = 8000 + Math.random() * 6000;
     p._retryAcc = 0;
     p._thought = pickThought(p, 'full');
     _pickWanderTarget(p);
