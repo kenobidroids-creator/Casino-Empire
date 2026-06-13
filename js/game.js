@@ -1614,8 +1614,8 @@ function loop(ts){
 
   for(const p of [...G.patrons]) updatePatron(p,dt);
   for(const e of G.employees)    updateEmployee(e,dt);
-  updateFoodOrders(rawDtCap);
-  updateMachineReels(rawDtCap);
+  updateFoodOrders(dt);
+  updateMachineReels(dt);
   updateMgReels(rawDtCap);
   updateLFVisitors(dt);
   updateSpecialMachines(dt);
