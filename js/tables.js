@@ -139,8 +139,8 @@ function tickBlackjack(m, ts) {
       const pv=handValue(pl.cards);
       const p=G.patrons.find(p=>p.id===pl.patronId);
       if(pv>21)             { pl.result='bust'; }
-      else if(dv>21||pv>dv) { pl.result='win';  if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); G.dayStats.moneyOut+=pl.bet*2; if(p)spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060'); }
-      else if(pv===dv)      { pl.result='push'; if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet).toFixed(2));   G.dayStats.moneyOut+=pl.bet; }
+      else if(dv>21||pv>dv) { pl.result='win';  if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); if(p)spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060'); }
+      else if(pv===dv)      { pl.result='push'; if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet).toFixed(2)); }
       else                  { pl.result='lose'; }
     }
     ts.phase='paying'; ts.timer=2000;
@@ -161,7 +161,7 @@ function tickRoulette(m, ts) {
     for(const pl of ts.players) {
       const win=ts.winNum!==0 && Math.random()<0.486;
       const p=G.patrons.find(p=>p.id===pl.patronId);
-      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); G.dayStats.moneyOut+=pl.bet*2; }
+      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); }
       if(p&&win) spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060');
     }
     toast(ts.winNum+(isRed?' 🔴':ts.winNum===0?' 🟢':' ⚫'));
@@ -183,7 +183,7 @@ function tickPoker(m, ts) {
     for(const pl of ts.players) {
       const win=Math.random()<0.44;
       const p=G.patrons.find(p=>p.id===pl.patronId);
-      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*1.9).toFixed(2)); G.dayStats.moneyOut+=pl.bet*1.9; }
+      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*1.9).toFixed(2)); }
       if(p&&win) spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*1.9).toFixed(2),'#f0d060');
     }
     ts.phase='paying'; ts.timer=2000;
@@ -247,7 +247,6 @@ function updateSportsbook(m, dt) {
     if(Math.random()<0.42) {
       const payout=betAmount*2;
       p.ticketValue = parseFloat((p.ticketValue + payout).toFixed(2));
-      G.dayStats.moneyOut+=payout;
       spawnFloat(p.wx,p.wy-18,'SPORTS +$'+payout.toFixed(2),'#60d0ff');
     }
   }

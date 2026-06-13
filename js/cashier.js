@@ -109,20 +109,23 @@ function renderTray() {
 }
 
 function confirmPay() {
-  if(!G.cashierServing) return;
+  const p = G.cashierServing;
+  if(!p) return;
   const total=parseFloat(G.payTray.reduce((s,v)=>s+v,0).toFixed(2));
-  const owed=G.cashierServing.ticketValue;
+  const owed=p.ticketValue;
   if(total<owed-.005){toast('Need $'+owed.toFixed(2),'r');return;}
-  G.money-=total;
+
+  p._payoutAmt = total; // Deduct the full amount from the tray (including overpayment)
   const chg=parseFloat((total-owed).toFixed(2));
   toast(chg>.005?'Paid! Change: $'+chg.toFixed(2):'Exact change ✓','g');
   finalizePayment();
 }
 
 function autoPay() {
-  if(!G.cashierServing) return;
-  G.money-=G.cashierServing.ticketValue;
-  toast('Auto-paid $'+G.cashierServing.ticketValue.toFixed(2),'g');
+  const p = G.cashierServing;
+  if(!p) return;
+  p._payoutAmt = p.ticketValue;
+  toast('Auto-paid $'+p.ticketValue.toFixed(2),'g');
   finalizePayment();
 }
 

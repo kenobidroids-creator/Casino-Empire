@@ -314,12 +314,25 @@ document.addEventListener('keydown',e=>{
   if(e.key==='3') setSpd(3);
 });
 
-// Right-click cancels placement / closes edit popup
-canvas.addEventListener('contextmenu', e=>{
+// Right-click cancels placement / closes active UI panels
+window.addEventListener('contextmenu', e=>{
   e.preventDefault();
   if(G.placementSelected) exitPlacementMode();
   else if(G.moveMode) cancelMove();
-  else closeEditPopup();
+  else if(G._editPopupMid) closeEditPopup();
+  else {
+    // Close any open panels
+    if(document.getElementById('upgrade-panel').style.display==='block') closeUpgradePanel();
+    if(document.getElementById('cashier-panel').style.display==='block') closeCashierPanel();
+    if(document.getElementById('bar-panel').style.display==='block') closeBarPanel();
+    if(document.getElementById('mgmt-panel').style.display==='block') closeManagementWindow();
+    if(document.getElementById('surv-panel').style.display==='block') closeSurveillancePanel();
+    if(document.getElementById('mg-panel').style.display==='block') closeMinigame();
+    if(document.getElementById('repair-panel').style.display==='block') closeRepairPanel();
+    if(document.getElementById('lf-claim-panel').style.display==='block') closeLFClaimPanel();
+    if(document.getElementById('patron-panel').style.display==='block') closePatronPanel();
+    if(document.getElementById('jp-panel').style.display==='block') document.getElementById('jp-panel').style.display='none';
+  }
 });
 
 // ══════════════════════════════════════════
@@ -409,14 +422,7 @@ function findMachineAtTile(tx,ty){
 //  Hotbar — multi-row on mobile
 // ══════════════════════════════════════════
 function buildHotbar(){
-  const scroll=document.getElementById('hotbar-scroll');
-  if(!scroll._wheelAttached){
-    scroll.addEventListener('wheel', e => {
-      e.preventDefault();
-      scroll.scrollLeft += e.deltaY;
-    }, {passive:false});
-    scroll._wheelAttached = true;
-  }
+  const scroll = document.getElementById('hotbar-scroll');
   scroll.innerHTML='';
   const items=['slot_basic','slot_silver','slot_gold','slot_diamond',
                'kiosk','cashier','bar','table',
@@ -501,6 +507,21 @@ function updateFoundMoneyBadge(){
     b.style.display='none';
   }
 }
+
+// ══════════════════════════════════════════
+//  Hotbar Wheel Scroll
+// ══════════════════════════════════════════
+window.addEventListener('wheel', e => {
+  const hb = document.getElementById('hotbar');
+  const scroll = document.getElementById('hotbar-scroll');
+  if(!hb || !scroll) return;
+  // Check if mouse is over hotbar or any of its children
+  if(hb.contains(e.target)) {
+    const amt = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    scroll.scrollLeft += amt;
+    e.preventDefault();
+  }
+}, {passive:false});
 
 // ══════════════════════════════════════════
 //  Controls

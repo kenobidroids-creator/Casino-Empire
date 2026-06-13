@@ -104,9 +104,8 @@ function updatePatron(p,dt) {
     case 'WAITING_KIOSK':
       p._kioskTimer-=dt;
       if(p._kioskTimer<=0) {
-        const paid=p.ticketValue;
-        G.money-=paid; G.dayStats.moneyOut+=paid;
-        spawnFloat(p.wx,p.wy-18,'-$'+paid.toFixed(2)+' kiosk','#e08060');
+        p._payoutAmt = p.ticketValue;
+        spawnFloat(p.wx,p.wy-18,'-$'+p.ticketValue.toFixed(2)+' kiosk','#e08060');
         p.ticketPaid=true; p.ticketValue=0;
         afterPayment(p);
       }
@@ -117,9 +116,13 @@ function updatePatron(p,dt) {
       break;
     case 'PAID':
       p.ticketPaid=true;
-      G.money -= p.ticketValue;
-      G.dayStats.moneyOut += p.ticketValue;
+      const amt = p._payoutAmt || p.ticketValue;
+      if(amt > 0) {
+        G.money -= amt;
+        G.dayStats.moneyOut += amt;
+      }
       p.ticketValue=0;
+      p._payoutAmt=0;
       afterPayment(p);
       break;
   }

@@ -159,8 +159,7 @@ function doWork(e,dt) {
         return;
       }
       const amt = p2.ticketValue;
-      G.money -= amt;
-      G.dayStats.moneyOut = (G.dayStats.moneyOut||0) + amt;
+      p2._payoutAmt = amt;
       spawnFloat(p2.wx, p2.wy-20, 'Paid $'+amt.toFixed(2), '#7aca70');
       p2.ticketValue = 0;
       p2.ticketPaid = true;
