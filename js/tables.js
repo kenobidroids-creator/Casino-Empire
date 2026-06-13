@@ -111,7 +111,10 @@ function updateTableGame(m, dt) {
 function dismissTablePatrons(ts) {
   for(const pl of ts.players) {
     const p=G.patrons.find(p=>p.id===pl.patronId);
-    if(p) kickOut(p);
+    if(p) {
+      if(p.ticketValue > 0) routeToPayment(p);
+      else kickOut(p);
+    }
   }
   ts.players=[];
 }
@@ -136,8 +139,8 @@ function tickBlackjack(m, ts) {
       const pv=handValue(pl.cards);
       const p=G.patrons.find(p=>p.id===pl.patronId);
       if(pv>21)             { pl.result='bust'; }
-      else if(dv>21||pv>dv) { pl.result='win';  G.money-=pl.bet*2; G.dayStats.moneyOut+=pl.bet*2; if(p)spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060'); }
-      else if(pv===dv)      { pl.result='push'; G.money-=pl.bet;   G.dayStats.moneyOut+=pl.bet; }
+      else if(dv>21||pv>dv) { pl.result='win';  if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); G.dayStats.moneyOut+=pl.bet*2; if(p)spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060'); }
+      else if(pv===dv)      { pl.result='push'; if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet).toFixed(2));   G.dayStats.moneyOut+=pl.bet; }
       else                  { pl.result='lose'; }
     }
     ts.phase='paying'; ts.timer=2000;
@@ -157,8 +160,8 @@ function tickRoulette(m, ts) {
     const isRed=RED_NUMS.has(ts.winNum);
     for(const pl of ts.players) {
       const win=ts.winNum!==0 && Math.random()<0.486;
-      if(win) { G.money-=pl.bet*2; G.dayStats.moneyOut+=pl.bet*2; }
       const p=G.patrons.find(p=>p.id===pl.patronId);
+      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*2).toFixed(2)); G.dayStats.moneyOut+=pl.bet*2; }
       if(p&&win) spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*2).toFixed(2),'#f0d060');
     }
     toast(ts.winNum+(isRed?' 🔴':ts.winNum===0?' 🟢':' ⚫'));
@@ -179,8 +182,8 @@ function tickPoker(m, ts) {
   } else if(ts.phase==='resolving') {
     for(const pl of ts.players) {
       const win=Math.random()<0.44;
-      if(win) { G.money-=pl.bet*1.9; G.dayStats.moneyOut+=pl.bet*1.9; }
       const p=G.patrons.find(p=>p.id===pl.patronId);
+      if(win) { if(p) p.ticketValue = parseFloat((p.ticketValue + pl.bet*1.9).toFixed(2)); G.dayStats.moneyOut+=pl.bet*1.9; }
       if(p&&win) spawnFloat(p.wx,p.wy-18,'WIN $'+(pl.bet*1.9).toFixed(2),'#f0d060');
     }
     ts.phase='paying'; ts.timer=2000;
@@ -198,8 +201,24 @@ function updateBand(m, dt) {
   const cx=wp.x+MACHINE_DEFS[m.type].w*TILE/2;
   const cy=wp.y+MACHINE_DEFS[m.type].h*TILE/2;
   for(const p of G.patrons) {
-    if(Math.hypot(p.wx-cx,p.wy-cy)<TILE*4 && p.state==='LEAVING')
-      p.speed=Math.max(15,p.speed-0.5);
+    if(Math.hypot(p.wx-cx,p.wy-cy)<TILE*4) {
+      // Band boost mood and slow down leaving patrons
+      p._mood = Math.min(100, p._mood + dt*0.01);
+      if(p.state==='LEAVING') p._speedMult = 0.5;
+    }
+  }
+}
+
+function updateTvScreen(m, dt) {
+  const wp=tile2world(m.tx,m.ty);
+  const cx=wp.x+MACHINE_DEFS[m.type].w*TILE/2;
+  const cy=wp.y+MACHINE_DEFS[m.type].h*TILE/2;
+  for(const p of G.patrons) {
+    if(Math.hypot(p.wx-cx,p.wy-cy)<TILE*3.5) {
+      // TV screens boost mood slightly and slow down leaving patrons
+      p._mood = Math.min(100, p._mood + dt*0.005);
+      if(p.state==='LEAVING') p._speedMult = 0.7;
+    }
   }
 }
 
@@ -227,7 +246,8 @@ function updateSportsbook(m, dt) {
     spawnFloat(p.wx,p.wy-18,'BET $'+betAmount.toFixed(2),'#60d0ff');
     if(Math.random()<0.42) {
       const payout=betAmount*2;
-      G.money-=payout; G.dayStats.moneyOut+=payout;
+      p.ticketValue = parseFloat((p.ticketValue + payout).toFixed(2));
+      G.dayStats.moneyOut+=payout;
       spawnFloat(p.wx,p.wy-18,'SPORTS +$'+payout.toFixed(2),'#60d0ff');
     }
   }
@@ -242,11 +262,16 @@ const SPORT_EVENTS=[
 
 // ── Master update ─────────────────────────────────────────────────────────
 function updateSpecialMachines(dt) {
+  // Reset speed multipliers before applying machine bonuses
+  for(const p of G.patrons) p._speedMult = 1.0;
+
   for(const m of G.machines) {
     const def=MACHINE_DEFS[m.type];
+    if(!def) continue;
     if(def.tableGame)    updateTableGame(m,dt);
     if(def.isBand)       updateBand(m,dt);
     if(def.isSportsbook) updateSportsbook(m,dt);
+    if(def.isTvScreen)   updateTvScreen(m,dt);
   }
 }
 

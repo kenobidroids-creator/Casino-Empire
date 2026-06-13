@@ -410,6 +410,13 @@ function findMachineAtTile(tx,ty){
 // ══════════════════════════════════════════
 function buildHotbar(){
   const scroll=document.getElementById('hotbar-scroll');
+  if(!scroll._wheelAttached){
+    scroll.addEventListener('wheel', e => {
+      e.preventDefault();
+      scroll.scrollLeft += e.deltaY;
+    }, {passive:false});
+    scroll._wheelAttached = true;
+  }
   scroll.innerHTML='';
   const items=['slot_basic','slot_silver','slot_gold','slot_diamond',
                'kiosk','cashier','bar','table',
@@ -486,8 +493,13 @@ function updateHotbarAfford(){
 
 function updateFoundMoneyBadge(){
   const b=document.getElementById('found-money-badge');
-  if(b) b.style.display='none';
-  clearPersistNotif('found-money'); // silent — shown in day-end summary only
+  if(!b) return;
+  if(G.collectedMoneyPool > 0.009) {
+    b.style.display='inline-block';
+    b.textContent = '📦 $' + G.collectedMoneyPool.toFixed(2);
+  } else {
+    b.style.display='none';
+  }
 }
 
 // ══════════════════════════════════════════

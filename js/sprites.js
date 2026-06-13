@@ -152,7 +152,7 @@ function drawSlotReels(m,rx,ry,rw,rh) {
 }
 
 function updateMachineReels(dt) {
-  const now=Date.now();
+  const now=G.gameTime;
   for(const m of G.machines) {
     if(!m._reels) continue;
     for(const r of m._reels) {
@@ -177,7 +177,7 @@ function updateMachineReels(dt) {
 function startMachineReels(m,result) {
   if(!m._reels) initMachineReels(m);
   const SC=REEL_SYMBOLS.length;
-  const now=Date.now();
+  const now=G.gameTime;
   const stopDelays=[1800,2300,2800];
   m._reels.forEach((r,i)=>{
     const targetSym=REEL_SYMBOLS.indexOf(result[i]);
@@ -398,7 +398,7 @@ function drawTableSprite(m,def,x,y,w,h) {
 function drawMachineOverlays(m,def,sp,pw,ph) {
   // ── Broken overlay ──
   if(m.broken) {
-    const t = Date.now()/400;
+    const t = G.gameTime/400;
     const a = 0.35 + 0.3*Math.abs(Math.sin(t));
     ctx.fillStyle = `rgba(220,60,30,${a})`;
     ctx.fillRect(sp.x, sp.y, pw*TILE, ph*TILE);
@@ -439,8 +439,8 @@ function drawMachineOverlays(m,def,sp,pw,ph) {
   }
 
   // Earn flash
-  if(m._flash&&Date.now()-m._flash<800) {
-    const a=1-(Date.now()-m._flash)/800;
+  if(m._flash&&G.gameTime-m._flash<800) {
+    const a=1-(G.gameTime-m._flash)/800;
     const dy=-18*(1-a);
     ctx.globalAlpha=a;
     ctx.fillStyle='#90e060'; ctx.font='bold 11px monospace';
@@ -489,7 +489,7 @@ function drawPatron(p) {
 
   // Delivery highlight ring
   if(typeof _highlightPid!=='undefined'&&_highlightPid===p.id){
-    const pulse=0.5+0.5*Math.sin(Date.now()*0.008);
+    const pulse=0.5+0.5*Math.sin(G.gameTime*0.008);
     ctx.strokeStyle=`rgba(80,220,120,${0.6+pulse*0.4})`;
     ctx.lineWidth=2.5;
     ctx.beginPath();ctx.arc(x,y-4,16+pulse*3,0,Math.PI*2);ctx.stroke();
@@ -672,7 +672,7 @@ function drawEmployee(e) {
 const BAND_ACTS = ['band','guitarist','singer','comedian'];
 
 function drawBandSprite(m, def, x, y, w, h) {
-  const t = Date.now();
+  const t = G.gameTime;
   const beat = (t % 800) / 800;    // 0..1 per beat
   const beatBop = Math.sin(beat * Math.PI * 2) * 2;
 
@@ -822,7 +822,7 @@ function drawStagePerformer(m, cx, cy, bop, color, role) {
 
 // ── TV Screen ──────────────────────────────
 function drawTvScreenSprite(m,def,x,y,w,h) {
-  const t=Date.now();
+  const t=G.gameTime;
   // Outer TV casing
   ctx.fillStyle='#08080c'; prect(x+2,y+2,w-4,h-4,4); ctx.fill();
   ctx.strokeStyle='rgba(80,120,200,.3)'; ctx.lineWidth=1;

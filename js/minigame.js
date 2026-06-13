@@ -63,7 +63,7 @@ function mgSpin() {
   }
 
   // Set absolute targets for each reel
-  const now=Date.now();
+  const now=G.gameTime;
   const stopDelays=[1800,2300,2800]; // ms until each reel starts stopping
   G.minigameReels.forEach((r,i)=>{
     const targetSym=REEL_SYMBOLS.indexOf(reelResult[i]);
@@ -76,26 +76,13 @@ function mgSpin() {
     r.stopAt=now+stopDelays[i];
   });
 
-  // Show result after last reel stops
-  setTimeout(()=>{
-    G.minigameSpinning=false;
-    document.getElementById('mg-spin-btn').disabled=false;
-    if(G.minigameResult.win) {
-      G.money+=G.minigameResult.winnings;
-      document.getElementById('mg-result').textContent=
-        '🎉 WIN $'+G.minigameResult.winnings.toFixed(2)+' ('+G.minigameResult.mult+'×)';
-      document.getElementById('mg-result').style.color='#90e060';
-    } else {
-      document.getElementById('mg-result').textContent='No match — try again!';
-      document.getElementById('mg-result').style.color='#e06060';
-    }
-  },3200);
+  G.minigameResultShowAt = now + 3200;
 }
 
 // ── Called every frame ──────────────────────
 function updateMgReels(dt) {
   if(!G.minigameOpen) return;
-  const now=Date.now();
+  const now=G.gameTime;
   let anyMoving=false;
   for(const r of G.minigameReels) {
     if(r.stopped) continue;
@@ -116,6 +103,21 @@ function updateMgReels(dt) {
       r.pos+=r.speed*dt/1000;
     }
   }
+
+  if(G.minigameSpinning && !anyMoving && now >= G.minigameResultShowAt) {
+    G.minigameSpinning=false;
+    document.getElementById('mg-spin-btn').disabled=false;
+    if(G.minigameResult.win) {
+      G.money+=G.minigameResult.winnings;
+      document.getElementById('mg-result').textContent=
+        '🎉 WIN $'+G.minigameResult.winnings.toFixed(2)+' ('+G.minigameResult.mult+'×)';
+      document.getElementById('mg-result').style.color='#90e060';
+    } else {
+      document.getElementById('mg-result').textContent='No match — try again!';
+      document.getElementById('mg-result').style.color='#e06060';
+    }
+  }
+
   if(G.minigameOpen) renderMgReels();
 }
 
