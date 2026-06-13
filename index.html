@@ -35,9 +35,9 @@
 <!-- Top Controls -->
 <div id="controls">
   <div class="ctrl-group" id="speed-group">
-    <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)">1x</button>
-    <button class="ctrl-btn" id="spd2" onclick="setSpd(2)">2x</button>
-    <button class="ctrl-btn" id="spd3" onclick="setSpd(3)">3x</button>
+    <button class="ctrl-btn active" id="spd1" onclick="setSpd(1)" title="1x speed [1]">1x</button>
+    <button class="ctrl-btn" id="spd2" onclick="setSpd(2)" title="2x speed [2]">2x</button>
+    <button class="ctrl-btn" id="spd3" onclick="setSpd(3)" title="3x speed [3]">3x</button>
   </div>
   <div class="ctrl-group" id="right-group">
     <span id="placement-label"></span>
@@ -78,7 +78,7 @@
 
 <!-- UPGRADE PANEL -->
 <div id="upgrade-panel" class="panel">
-  <button class="panel-close" onclick="closeUpgradePanel()">X</button>
+  <button class="panel-close" onclick="closeUpgradePanel()" aria-label="Close">✕</button>
   <h2 id="upg-title">Machine</h2>
   <div class="mstat-grid" id="mstats"></div>
   <div id="upg-options"></div>
@@ -89,7 +89,7 @@
 
 <!-- CASHIER PANEL -->
 <div id="cashier-panel" class="panel">
-  <button class="panel-close" onclick="closeCashierPanel()">X</button>
+  <button class="panel-close" onclick="closeCashierPanel()" aria-label="Close">✕</button>
   <h2>Cashier Window</h2>
   <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
     <button class="ctrl-btn" style="font-size:9px;padding:3px 8px" onclick="openCashierManage()">⚙ Manage</button>
@@ -145,7 +145,7 @@
 
 <!-- JACKPOT PANEL -->
 <div id="jp-panel" class="panel">
-  <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">X</button>
+  <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'" aria-label="Close">✕</button>
   <h2 style="text-align:center">JACKPOT HAND PAY</h2>
   <p style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm);margin-bottom:4px">Patron won:</p>
   <div class="jp-amount" id="jp-amount">$0.00</div>
@@ -216,14 +216,14 @@
 
 <!-- PATRON THOUGHTS PANEL -->
 <div id="patron-panel" class="panel" style="display:none;width:min(280px,90vw)">
-  <button class="panel-close" onclick="closePatronPanel()">X</button>
+  <button class="panel-close" onclick="closePatronPanel()" aria-label="Close">✕</button>
   <h2 id="patron-panel-name">Patron</h2>
   <div id="patron-panel-body"></div>
 </div>
 
 <!-- MANAGEMENT WINDOW -->
 <div id="mgmt-panel" class="panel">
-  <button class="panel-close" onclick="closeManagementWindow()">X</button>
+  <button class="panel-close" onclick="closeManagementWindow()" aria-label="Close">✕</button>
   <h2>Casino Management</h2>
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
     <button class="ctrl-btn" onclick="openSurveillancePanel();closeManagementWindow()">Surveillance</button>
@@ -238,7 +238,7 @@
 
 <!-- SURVEILLANCE PANEL -->
 <div id="surv-panel" class="panel">
-  <button class="panel-close" onclick="closeSurveillancePanel()">X</button>
+  <button class="panel-close" onclick="closeSurveillancePanel()" aria-label="Close">✕</button>
   <h2>Surveillance Room</h2>
   <p style="color:var(--text-muted);font-size:var(--fs-xs);margin-bottom:6px">Live feeds. Warning icon = dropped money detected.</p>
   <div id="surv-grid"></div>
@@ -246,7 +246,7 @@
 
 <!-- MINIGAME PANEL -->
 <div id="mg-panel" class="panel">
-  <button class="panel-close" onclick="closeMinigame()">X</button>
+  <button class="panel-close" onclick="closeMinigame()" aria-label="Close">✕</button>
   <h2 style="text-align:center">Try Your Luck</h2>
   <canvas id="mg-canvas" width="300" height="88"></canvas>
   <div class="mg-controls">
