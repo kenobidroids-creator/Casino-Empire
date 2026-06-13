@@ -148,7 +148,7 @@ function doWork(e,dt) {
     const patron=G.patrons.find(p=>p.id===pid);
     if(!patron){G.cashierQueue.shift();e.state='IDLE';e.task=null;return;}
     // Process from post — no walking to patron
-    const delay = 1400 / Math.max(1, G.speed);
+    const delay = 800 / Math.max(1, G.speed);
     setTimeout(()=>{
       const p2=G.patrons.find(p=>p.id===pid);
       // Guard: patron may have already been paid (by player) or left
@@ -175,7 +175,7 @@ function doWork(e,dt) {
   else if(e.type==='slot_attendant') {
     const j=G.jackpots.find(j=>j.id===e.taskId);
     if(!j){e.state='IDLE';e.task=null;return;}
-    setTimeout(()=>{ resolveJackpot(j); }, 2000/Math.max(1,G.speed));
+    setTimeout(()=>{ resolveJackpot(j); }, 1200/Math.max(1,G.speed));
     e.state='IDLE'; e.task=null;
   }
 

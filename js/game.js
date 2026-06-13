@@ -105,34 +105,61 @@ function toast(msg,cls=''){
   setTimeout(()=>t.remove(),3000);
 }
 
+let _hudLastUpdate = 0;
+const _hudCache = {};
 function updateHUD(){
+  const now = Date.now();
+  if(now - _hudLastUpdate < 100) return; // 10fps HUD
+  _hudLastUpdate = now;
+
+  const updateEl = (id, val) => {
+    if(_hudCache[id] === val) return;
+    const el = document.getElementById(id);
+    if(el) { el.textContent = val; _hudCache[id] = val; }
+  };
+
   const bal=Math.floor(G.money);
-  document.getElementById('h-money').textContent='$'+bal.toLocaleString();
-  document.getElementById('h-rev').textContent  ='$'+Math.floor(calcRevPerMin()).toLocaleString();
-  document.getElementById('h-pat').textContent  =G.patrons.length;
-  document.getElementById('h-day').textContent  =G.day;
-  document.getElementById('h-emp').textContent  =G.employees.length;
+  updateEl('h-money', '$'+bal.toLocaleString());
+  updateEl('h-rev',   '$'+Math.floor(calcRevPerMin()).toLocaleString());
+  updateEl('h-pat',   G.patrons.length);
+  updateEl('h-day',   G.day);
+  updateEl('h-emp',   G.employees.length);
 
   // Day progress bar + time-of-day (6 AM open → 4 AM close, 22-hour day)
   const pct = Math.min(1, (G.dayAcc||0) / G.dayLen);
-  document.getElementById('h-daybar-fill').style.width = (pct*100).toFixed(1)+'%';
+  const barW = (pct*100).toFixed(1)+'%';
+  if(_hudCache['h-daybar-fill'] !== barW) {
+    const bar = document.getElementById('h-daybar-fill');
+    if(bar) bar.style.width = barW;
+    _hudCache['h-daybar-fill'] = barW;
+  }
+
   const totalMins = pct * 1320;           // 22 hours mapped across day
   const rawMins   = 6*60 + totalMins;     // starts 6:00 AM
   const hour = Math.floor(rawMins/60) % 24;
   const min  = Math.floor(rawMins % 60);
   const ampm = hour < 12 ? 'AM' : 'PM';
   const h12  = hour % 12 || 12;
-  const clockEl = document.getElementById('h-daytime');
-  if(clockEl) clockEl.textContent = h12+':'+String(min).padStart(2,'0')+' '+ampm;
+  const clockVal = h12+':'+String(min).padStart(2,'0')+' '+ampm;
+  updateEl('h-daytime', clockVal);
 
   // Day-of-week label + busy indicator
   const DOW_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const DOW_BUSY  = [false,false,false,false,true,true,true];
   const dow = (G.dayOfWeek??0) % 7;
+  const dowText = DOW_NAMES[dow];
+  const dowColor = DOW_BUSY[dow] ? '#ffcc44' : 'rgba(201,168,76,.4)';
+
   const dowEl = document.getElementById('h-dow');
   if(dowEl) {
-    dowEl.textContent = DOW_NAMES[dow];
-    dowEl.style.color = DOW_BUSY[dow] ? '#ffcc44' : 'rgba(201,168,76,.4)';
+    if(_hudCache['h-dow-text'] !== dowText) {
+      dowEl.textContent = dowText;
+      _hudCache['h-dow-text'] = dowText;
+    }
+    if(_hudCache['h-dow-color'] !== dowColor) {
+      dowEl.style.color = dowColor;
+      _hudCache['h-dow-color'] = dowColor;
+    }
   }
 
   updateHotbarAfford();
@@ -144,28 +171,52 @@ function updateHUD(){
   if(expandBtn){
     if(nextLv<FLOOR_LEVELS.length){
       const lv=FLOOR_LEVELS[nextLv];
-      expandBtn.style.display='inline';
-      expandBtn.textContent='📐 Expand ($'+lv.cost.toLocaleString()+')';
-      expandBtn.disabled=G.money<lv.cost;
+      const exTxt = '📐 Expand ($'+lv.cost.toLocaleString()+')';
+      const exDis = G.money < lv.cost;
+
+      if(_hudCache['expand-btn-disp'] !== 'inline') {
+        expandBtn.style.display = 'inline';
+        _hudCache['expand-btn-disp'] = 'inline';
+      }
+      if(_hudCache['expand-btn-text'] !== exTxt) {
+        expandBtn.textContent = exTxt;
+        _hudCache['expand-btn-text'] = exTxt;
+      }
+      if(_hudCache['expand-btn-disabled'] !== exDis) {
+        expandBtn.disabled = exDis;
+        _hudCache['expand-btn-disabled'] = exDis;
+      }
     } else {
-      expandBtn.style.display='none';
+      if(_hudCache['expand-btn-disp'] !== 'none') {
+        expandBtn.style.display = 'none';
+        _hudCache['expand-btn-disp'] = 'none';
+      }
     }
   }
 
   // Placement mode label
   const pl=document.getElementById('placement-label');
-  const type=G.placementSelected||G.dragging?.type||G.moveMode?.machineId?'Move':null;
-  if(G.placementSelected||G.dragging){
-    const t2=G.placementSelected||G.dragging?.type;
-    const def=MACHINE_DEFS[t2];
-    const dirs=['↓S','←W','↑N','→E'];
-    pl.textContent=def?.icon+' '+def?.name+' ['+dirs[G.placementRotation]+']';
-    pl.style.display='inline';
-  } else if(G.moveMode) {
-    pl.textContent='Moving… tap new position  •  Esc to cancel';
-    pl.style.display='inline';
-  } else {
-    pl.style.display='none';
+  if(pl) {
+    let plTxt = '', plDisp = 'none';
+    if(G.placementSelected||G.dragging){
+      const t2=G.placementSelected||G.dragging?.type;
+      const def=MACHINE_DEFS[t2];
+      const dirs=['↓S','←W','↑N','→E'];
+      plTxt = def?.icon+' '+def?.name+' ['+dirs[G.placementRotation]+']';
+      plDisp = 'inline';
+    } else if(G.moveMode) {
+      plTxt = 'Moving… tap new position  •  Esc to cancel';
+      plDisp = 'inline';
+    }
+
+    if(_hudCache['pl-disp'] !== plDisp) {
+      pl.style.display = plDisp;
+      _hudCache['pl-disp'] = plDisp;
+    }
+    if(plDisp === 'inline' && _hudCache['pl-text'] !== plTxt) {
+      pl.textContent = plTxt;
+      _hudCache['pl-text'] = plTxt;
+    }
   }
 
   // Upgrade panel live reel
