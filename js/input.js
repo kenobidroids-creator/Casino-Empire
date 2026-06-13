@@ -423,9 +423,16 @@ function addHotbarMachine(container,type){
   const def=MACHINE_DEFS[type];
   const div=document.createElement('div');
   div.className='hotbar-item'; div.dataset.type=type;
+  div.tabIndex=0;
+  div.setAttribute('role', 'button');
+  div.setAttribute('aria-label', 'Place ' + def.name);
   div.innerHTML=`<div class="hi-icon">${def.icon}</div>
     <div class="hi-name">${def.name}</div>
     <div class="hi-cost">$${def.cost.toLocaleString()}</div>`;
+
+  div.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') div.click();
+  });
 
   // Desktop drag
   div.addEventListener('mousedown',e=>{
@@ -454,10 +461,16 @@ function addHotbarEmployee(container,type){
   const def=EMPLOYEE_DEFS[type];
   const div=document.createElement('div');
   div.className='hotbar-item hire-item'; div.dataset.etype=type;
+  div.tabIndex=0;
+  div.setAttribute('role', 'button');
+  div.setAttribute('aria-label', 'Hire ' + def.name);
   div.innerHTML=`<div class="hi-icon">${def.icon}</div>
     <div class="hi-name">${def.name}</div>
     <div class="hi-cost hire">Hire $${def.cost}</div>`;
   div.addEventListener('click',()=>hireEmployee(type));
+  div.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') div.click();
+  });
   container.appendChild(div);
 }
 

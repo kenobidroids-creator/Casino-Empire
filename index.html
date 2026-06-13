@@ -52,16 +52,16 @@
 
 <!-- Place cancel / placement toolbar -->
 <div id="place-cancel-btn">
-  <button class="ctrl-btn" onclick="rotatePlacement()" title="R key">↻ Rotate</button>
+  <button class="ctrl-btn" onclick="rotatePlacement()" title="R key" aria-label="Rotate machine">↻ Rotate</button>
   <button class="ctrl-btn danger" onclick="exitPlacementMode()" title="Esc">✕ Cancel</button>
 </div>
 
 <!-- Edit popup (move/rotate/remove for placed machines) -->
 <div id="edit-popup" style="display:none">
-  <button class="edit-pop-btn" onclick="editPopRotate()" title="R key">↻ Rotate</button>
-  <button class="edit-pop-btn" onclick="editPopMove()">⤢ Move</button>
-  <button class="edit-pop-btn danger" onclick="editPopRemove()">🗑 Remove</button>
-  <button class="edit-pop-btn close" onclick="closeEditPopup()">✕</button>
+  <button class="edit-pop-btn" onclick="editPopRotate()" title="R key" aria-label="Rotate machine">↻ Rotate</button>
+  <button class="edit-pop-btn" onclick="editPopMove()" aria-label="Move machine">⤢ Move</button>
+  <button class="edit-pop-btn danger" onclick="editPopRemove()" aria-label="Remove machine">🗑 Remove</button>
+  <button class="edit-pop-btn close" onclick="closeEditPopup()" aria-label="Close edit menu">✕</button>
 </div>
 
 <!-- Notification rail (left side) -->
@@ -78,7 +78,7 @@
 
 <!-- UPGRADE PANEL -->
 <div id="upgrade-panel" class="panel">
-  <button class="panel-close" onclick="closeUpgradePanel()">X</button>
+  <button class="panel-close" onclick="closeUpgradePanel()" aria-label="Close">✕</button>
   <h2 id="upg-title">Machine</h2>
   <div class="mstat-grid" id="mstats"></div>
   <div id="upg-options"></div>
@@ -89,7 +89,7 @@
 
 <!-- CASHIER PANEL -->
 <div id="cashier-panel" class="panel">
-  <button class="panel-close" onclick="closeCashierPanel()">X</button>
+  <button class="panel-close" onclick="closeCashierPanel()" aria-label="Close">✕</button>
   <h2>Cashier Window</h2>
   <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
     <button class="ctrl-btn" style="font-size:9px;padding:3px 8px" onclick="openCashierManage()">⚙ Manage</button>
@@ -116,7 +116,7 @@
 
 <!-- BAR PANEL -->
 <div id="bar-panel" class="panel" style="display:none;width:min(380px,96vw)">
-  <button class="panel-close" onclick="closeBarPanel()">✕</button>
+  <button class="panel-close" onclick="closeBarPanel()" aria-label="Close">✕</button>
   <h2 id="bar-panel-title">🍺 Bar</h2>
   <div id="bar-orders-list" style="max-height:min(55vh,420px);overflow-y:auto"></div>
   <div id="bar-empty-msg" style="color:var(--text-muted);text-align:center;padding:18px 0;font-size:var(--fs-sm);display:none">
@@ -126,7 +126,7 @@
 
 <!-- REPAIR PANEL -->
 <div id="repair-panel" class="panel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(340px,94vw);z-index:300">
-  <button class="panel-close" onclick="closeRepairPanel()">✕</button>
+  <button class="panel-close" onclick="closeRepairPanel()" aria-label="Close">✕</button>
   <div class="panel-title">🔧 Machine Repair</div>
   <div style="text-align:center;margin-bottom:8px">
     <span id="repair-machine-name" style="color:var(--gold-light);font-weight:700;font-size:var(--fs-lg)"></span>
@@ -145,7 +145,7 @@
 
 <!-- JACKPOT PANEL -->
 <div id="jp-panel" class="panel">
-  <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'">X</button>
+  <button class="panel-close" onclick="document.getElementById('jp-panel').style.display='none'" aria-label="Close">✕</button>
   <h2 style="text-align:center">JACKPOT HAND PAY</h2>
   <p style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm);margin-bottom:4px">Patron won:</p>
   <div class="jp-amount" id="jp-amount">$0.00</div>
@@ -154,7 +154,7 @@
 
 <!-- SECURITY / LOST & FOUND CLAIM PANEL -->
 <div id="lf-claim-panel" class="panel" style="display:none;width:min(300px,92vw);text-align:center">
-  <button class="panel-close" onclick="closeLFClaimPanel()">✕</button>
+  <button class="panel-close" onclick="closeLFClaimPanel()" aria-label="Close">✕</button>
   <h2>📦 Lost &amp; Found Claim</h2>
   <div style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:6px" id="lf-claim-name">Patron Name</div>
   <div style="font-size:26px;font-weight:700;color:#7aba70;margin:8px 0" id="lf-claim-amount">$0.00</div>
@@ -216,14 +216,14 @@
 
 <!-- PATRON THOUGHTS PANEL -->
 <div id="patron-panel" class="panel" style="display:none;width:min(280px,90vw)">
-  <button class="panel-close" onclick="closePatronPanel()">X</button>
+  <button class="panel-close" onclick="closePatronPanel()" aria-label="Close">✕</button>
   <h2 id="patron-panel-name">Patron</h2>
   <div id="patron-panel-body"></div>
 </div>
 
 <!-- MANAGEMENT WINDOW -->
 <div id="mgmt-panel" class="panel">
-  <button class="panel-close" onclick="closeManagementWindow()">X</button>
+  <button class="panel-close" onclick="closeManagementWindow()" aria-label="Close">✕</button>
   <h2>Casino Management</h2>
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
     <button class="ctrl-btn" onclick="openSurveillancePanel();closeManagementWindow()">Surveillance</button>
@@ -238,7 +238,7 @@
 
 <!-- SURVEILLANCE PANEL -->
 <div id="surv-panel" class="panel">
-  <button class="panel-close" onclick="closeSurveillancePanel()">X</button>
+  <button class="panel-close" onclick="closeSurveillancePanel()" aria-label="Close">✕</button>
   <h2>Surveillance Room</h2>
   <p style="color:var(--text-muted);font-size:var(--fs-xs);margin-bottom:6px">Live feeds. Warning icon = dropped money detected.</p>
   <div id="surv-grid"></div>
@@ -246,7 +246,7 @@
 
 <!-- MINIGAME PANEL -->
 <div id="mg-panel" class="panel">
-  <button class="panel-close" onclick="closeMinigame()">X</button>
+  <button class="panel-close" onclick="closeMinigame()" aria-label="Close">✕</button>
   <h2 style="text-align:center">Try Your Luck</h2>
   <canvas id="mg-canvas" width="300" height="88"></canvas>
   <div class="mg-controls">
