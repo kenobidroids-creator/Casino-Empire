@@ -299,6 +299,7 @@ function exitPlacementMode(){
 
 // ── Keyboard shortcuts ─────────────────────
 document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
   if(e.key==='Escape'){
     if(G.moveMode) cancelMove();
     else if(G.placementSelected) exitPlacementMode();
@@ -308,6 +309,9 @@ document.addEventListener('keydown',e=>{
     if(G._editPopupMid) editPopRotate();
     else rotatePlacement();
   }
+  if(e.key==='1') setSpd(1);
+  if(e.key==='2') setSpd(2);
+  if(e.key==='3') setSpd(3);
 });
 
 // Right-click cancels placement / closes edit popup
@@ -421,14 +425,15 @@ function buildHotbar(){
 
 function addHotbarMachine(container,type){
   const def=MACHINE_DEFS[type];
-  const div=document.createElement('div');
-  div.className='hotbar-item'; div.dataset.type=type;
-  div.innerHTML=`<div class="hi-icon">${def.icon}</div>
+  const btn=document.createElement('button');
+  btn.className='hotbar-item'; btn.dataset.type=type;
+  btn.setAttribute('aria-label', `Place ${def.name} for $${def.cost}`);
+  btn.innerHTML=`<div class="hi-icon">${def.icon}</div>
     <div class="hi-name">${def.name}</div>
     <div class="hi-cost">$${def.cost.toLocaleString()}</div>`;
 
   // Desktop drag
-  div.addEventListener('mousedown',e=>{
+  btn.addEventListener('mousedown',e=>{
     if(isTouch) return;
     G.dragging={type};
     const ghost=document.getElementById('drag-ghost');
@@ -439,7 +444,7 @@ function addHotbarMachine(container,type){
   });
 
   // Tap-to-select
-  div.addEventListener('click',e=>{
+  btn.addEventListener('click',e=>{
     if(G.placementSelected===type){exitPlacementMode();return;}
     G.placementSelected=type; G.placementRotation=0;
     canvas.classList.add('placing');
@@ -447,18 +452,19 @@ function addHotbarMachine(container,type){
     updateHotbarSelection();
     toast(def.name+': tap floor to place • R to rotate','');
   });
-  container.appendChild(div);
+  container.appendChild(btn);
 }
 
 function addHotbarEmployee(container,type){
   const def=EMPLOYEE_DEFS[type];
-  const div=document.createElement('div');
-  div.className='hotbar-item hire-item'; div.dataset.etype=type;
-  div.innerHTML=`<div class="hi-icon">${def.icon}</div>
+  const btn=document.createElement('button');
+  btn.className='hotbar-item hire-item'; btn.dataset.etype=type;
+  btn.setAttribute('aria-label', `Hire ${def.name} for $${def.cost}`);
+  btn.innerHTML=`<div class="hi-icon">${def.icon}</div>
     <div class="hi-name">${def.name}</div>
     <div class="hi-cost hire">Hire $${def.cost}</div>`;
-  div.addEventListener('click',()=>hireEmployee(type));
-  container.appendChild(div);
+  btn.addEventListener('click',()=>hireEmployee(type));
+  container.appendChild(btn);
 }
 
 function updateHotbarSelection(){

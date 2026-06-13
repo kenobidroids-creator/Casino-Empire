@@ -1,0 +1,3 @@
+## 2025-05-14 - [Semantic Buttons and Keyboard Navigation]
+**Learning:** In game UIs, it's common to use `div` elements for complex interactive components (like hotbar items). However, this breaks keyboard accessibility and screen reader support by default. Converting these to `<button>` elements immediately makes them focusable and provides a standard interaction model. Descriptive `aria-labels` are necessary when UI elements are icon-heavy or have ambiguous labels (like just a price).
+**Action:** Use `<button>` for all interactive UI components and provide clear `:focus-visible` styles to support keyboard-only players.
