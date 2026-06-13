@@ -8,6 +8,58 @@ ctx.imageSmoothingEnabled = false;
 
 let hoverTile = null;
 
+let _grassPattern = null;
+let _carpetPattern = null;
+let _vignetteGrad = null;
+let _lastVignetteSize = { w: 0, h: 0 };
+
+function _createCarpetPattern() {
+  const SZ = TILE;
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = SZ;
+  tempCanvas.height = SZ;
+  const tctx = tempCanvas.getContext('2d');
+
+  const half = SZ / 2;
+  // Checkerboard
+  tctx.fillStyle = 'rgba(20,180,80,.04)';
+  tctx.fillRect(0, 0, half, half);
+  tctx.fillRect(half, half, half, half);
+
+  // Subtle grid lines
+  tctx.strokeStyle = 'rgba(255,255,255,.025)';
+  tctx.lineWidth = 0.5;
+  tctx.strokeRect(0, 0, SZ, SZ);
+
+  _carpetPattern = ctx.createPattern(tempCanvas, 'repeat');
+}
+
+function _createGrassPattern() {
+  const SZ = 128;
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = SZ;
+  tempCanvas.height = SZ;
+  const tctx = tempCanvas.getContext('2d');
+
+  tctx.fillStyle = '#1a3d10';
+  tctx.fillRect(0, 0, SZ, SZ);
+
+  const BLADE_SZ = 8;
+  for (let y = 0; y < SZ; y += BLADE_SZ) {
+    for (let x = 0; x < SZ; x += BLADE_SZ) {
+      const hash = ((x * 2654435761 ^ y * 2246822519) >>> 0) % 256;
+      if (hash < 60) {
+        tctx.fillStyle = 'rgba(30,70,15,.22)';
+        tctx.fillRect(x, y, 2, BLADE_SZ - 1);
+      } else if (hash < 100) {
+        tctx.fillStyle = 'rgba(50,100,20,.15)';
+        tctx.fillRect(x + 3, y + 2, BLADE_SZ - 4, 2);
+      }
+    }
+  }
+  _grassPattern = ctx.createPattern(tempCanvas, 'repeat');
+}
+
 // Coord helpers
 const w2s        = (wx,wy) => ({ x:wx+G.camera.x, y:wy+G.camera.y });
 const s2w        = (sx,sy) => ({ x:sx-G.camera.x, y:sy-G.camera.y });
@@ -147,22 +199,14 @@ function drawBrickWall(bx,by,bw,bh) {
 }
 
 function drawCarpet(fx,fy,fw,fh) {
-  const sz=TILE/2;
-  for(let ty=0; ty<G.floorH*2; ty++) {
-    for(let tx=0; tx<G.floorW*2; tx++) {
-      const px=fx+tx*sz, py=fy+ty*sz;
-      if((tx+ty)%2===0) {
-        ctx.fillStyle='rgba(20,180,80,.04)';
-        ctx.fillRect(px,py,sz,sz);
-      }
-      // Subtle grid lines (tile-sized)
-      if(tx%2===0 && ty%2===0) {
-        ctx.strokeStyle='rgba(255,255,255,.025)';
-        ctx.lineWidth=.5;
-        ctx.strokeRect(fx+(tx/2)*TILE, fy+(ty/2)*TILE, TILE, TILE);
-      }
-    }
-  }
+  if (!_carpetPattern) _createCarpetPattern();
+
+  const matrix = new DOMMatrix().translate(fx, fy);
+  _carpetPattern.setTransform(matrix);
+
+  ctx.fillStyle = _carpetPattern;
+  ctx.fillRect(fx, fy, fw, fh);
+
   // Diamond motif every 4 tiles
   for(let ty=2; ty<G.floorH; ty+=4) {
     for(let tx=2; tx<G.floorW; tx+=4) {
@@ -369,33 +413,24 @@ function shadecol(hex,amt) {
 // ═══════════════════════════════════════════
 
 function _drawGrassBackground(cw, ch, cx, cy) {
-  // Base grass colour
-  ctx.fillStyle = '#1a3d10';
+  if (!_grassPattern) _createGrassPattern();
+
+  // World-lock the grass pattern to the camera
+  const matrix = new DOMMatrix().translate(cx, cy);
+  _grassPattern.setTransform(matrix);
+
+  ctx.fillStyle = _grassPattern;
   ctx.fillRect(0, 0, cw, ch);
 
-  // Subtle grass blade texture — seeded by screen position so it doesn't shimmer
-  const BLADE_SZ = 8;
-  const offX = ((cx % BLADE_SZ) + BLADE_SZ) % BLADE_SZ;
-  const offY = ((cy % BLADE_SZ) + BLADE_SZ) % BLADE_SZ;
-  for (let sy = -offY; sy < ch + BLADE_SZ; sy += BLADE_SZ) {
-    for (let sx = -offX; sx < cw + BLADE_SZ; sx += BLADE_SZ) {
-      // Use a cheap deterministic hash for variety
-      const hash = ((sx * 2654435761 ^ sy * 2246822519) >>> 0) % 256;
-      if (hash < 60) {
-        ctx.fillStyle = 'rgba(30,70,15,.22)';
-        ctx.fillRect(sx, sy, 2, BLADE_SZ - 1);
-      } else if (hash < 100) {
-        ctx.fillStyle = 'rgba(50,100,20,.15)';
-        ctx.fillRect(sx + 3, sy + 2, BLADE_SZ - 4, 2);
-      }
-    }
+  // Subtle vignette at edges - cached to avoid re-creating every frame
+  if (!_vignetteGrad || _lastVignetteSize.w !== cw || _lastVignetteSize.h !== ch) {
+    _vignetteGrad = ctx.createRadialGradient(cw / 2, ch / 2, cw * 0.2, cw / 2, ch / 2, cw * 0.8);
+    _vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    _vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
+    _lastVignetteSize = { w: cw, h: ch };
   }
 
-  // Subtle vignette at edges
-  const grad = ctx.createRadialGradient(cw/2, ch/2, cw*0.2, cw/2, ch/2, cw*0.8);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.35)');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = _vignetteGrad;
   ctx.fillRect(0, 0, cw, ch);
 }
 
